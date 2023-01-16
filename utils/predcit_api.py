@@ -1,4 +1,6 @@
 import time
+import serial
+
 
 t1 = 0
 signal_t1 = 0
