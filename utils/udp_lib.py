@@ -7,28 +7,32 @@ class UdpServerCom:
         self.local_addr = addr
         self.port = port
         self.server_socket.bind((self.local_addr, self.port))
-        print("UDP running!")
+        print("UDP Server is running!")
 
     def disconnect(self):
         self.server_socket.close()
-        print("disconnection successful")
+        print("Disconnection Successful")
 
     def receive_msg(self):
-        output = self.server_socket.recv(1024).decode('utf-8')
+        return self.server_socket.recvfrom(1024)[1]
 
-        return output
+    def send_msg(self, message):
+        data, addr = self.server_socket.recvfrom(1024)
+        self.server_socket.sendto(message.encode(), (self.local_addr, self.port))
+        print(addr)
 
 
 class UdpClientCom:
-    def __init__(self, addr='localhost', port=6340):
+    def __init__(self, address='localhost', port=6340):
         self.client_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        self.local_addr = addr
+        self.addr = address
         self.port = port
-        print("UDP running!")
+        self.client_socket.connect((self.addr, self.port))
+        print("UDP Client is Running!")
 
     def disconnect(self):
         self.client_socket.close()
-        print("disconnection successful")
+        print("Disconnection Successful")
 
     def send_msg(self, message):
-        self.client_socket.sendto(message.encode(), (self.local_addr, self.port))
+        self.client_socket.sendto(message.encode(), (self.addr, self.port))
