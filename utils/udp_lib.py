@@ -31,5 +31,4 @@ class UdpClientCom:
         print("disconnection successful")
 
     def send_msg(self, message):
-        print(message)
         self.client_socket.sendto(message.encode(), (self.local_addr, self.port))
