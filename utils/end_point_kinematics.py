@@ -17,6 +17,4 @@ def end_point_kinematics(boom_angle, arm_angle, bucket_angle):
             (m_Arm_Length * math.sin(boom_angle * radian_conv + arm_angle * radian_conv)) + \
             (m_Bucket_Length * math.sin(boom_angle * radian_conv + arm_angle * radian_conv + bucket_angle * radian_conv)) + m_Height
 
-    #result = ('{0:.3f}').format(m_nZ)
-
     return x_pos, z_pos

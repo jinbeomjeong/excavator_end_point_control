@@ -21,11 +21,10 @@ m_dDstMl0 = m_arMajor * (m_dDstE0 * m_arLatCenter - m_dDstE1 * math.sin(2.0 * m_
 
 m_dDstInd = 0.0
 
-def gps_unit_change(E_d, N_d):
 
+def gps_unit_change(E_d, N_d):
     lon = E_d * math.pi / 180
     lat = N_d * math.pi / 180
-
 
     delta_lon = lon - m_arLonCenter
     sin_phi = math.sin(lat)
