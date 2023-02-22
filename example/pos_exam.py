@@ -1,11 +1,14 @@
-import time
+import time, can
 import numpy as np
 import pandas as pd
+from utils.can_msg_parser import MsgParser
 from utils.warning_target import get_target_boundary, get_distance, TargetDepth, get_end_pos
 from utils.tcp_lib import TCPClient
 
+can_msg_parser = MsgParser()
 
 radius: float = 1.0
+safety_level: float = 2.0
 
 np.set_printoptions(suppress=True)
 data = pd.read_csv('../data/data.csv')
@@ -27,6 +30,8 @@ tcp_start_data = [xy_map, xz_map, target_boundary]
 for data in tcp_start_data:
     tcp_handle.send_msg(np.array2string(data.flatten('C'), precision=1, separator=',').lstrip('[').rstrip(']'))
 
+bus = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
+
 t0 = time.time()
 while True:
     recv_data = np.fromstring(tcp_handle.receive_msg(), dtype=np.float32, sep=',')
@@ -37,5 +42,7 @@ while True:
     depth = depth_estimator.get_target_depth([x_pos, y_pos])
     tcp_handle.send_msg(str(depth))
 
-    dis = get_distance([x_pos, y_pos], target_boundary[0])
-    idx = np.argmin(dis)
+    dis1 = get_distance([x_pos, y_pos], target_boundary[0])
+    dis2 = get_distance([x_pos, y_pos], target_boundary[1])
+    dis = np.append(dis1, dis2)
+    bus.send(can_msg_parser.create_estimated_position(control_flag=1, state_flag=1, x_pos=x_pos, y_pos=y_pos, z_pos=0))

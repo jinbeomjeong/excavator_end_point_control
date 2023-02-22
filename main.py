@@ -4,7 +4,7 @@ from utils.predcit_api import predict_control
 from utils.sensor import InclinometerSensor
 from utils.end_point_kinematics import end_point_kinematics
 from utils.udp_lib import UdpClientCom
-
+from utils.can_msg_parser import MsgParser
 
 boom_pitch: float = 0.0
 arm_pitch: float = 0.0
@@ -47,6 +47,7 @@ heart_beat_thread.daemon = True
 heart_beat_thread.start()
 
 udp_handle = UdpClientCom(address='192.168.137.1', port=6340)
+can_msg_handle = MsgParser()
 
 while True:
     boom_pitch_pred = (0.5*boom_pitch_pred)+(0.5*boom_pitch)
@@ -62,5 +63,5 @@ while True:
            f'{predict_signal:.1f}']
 
     udp_handle.send_msg(','.join(msg))
-
+    can_msg_handle.send_estimated_position(control_flag=0, state_flag=0, x_pos=x_pos, y_pos=0, z_pos=z_pos)
     time.sleep(0.05)
