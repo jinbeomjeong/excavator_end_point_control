@@ -10,16 +10,17 @@ class MsgParser:
         self.__automatic_control_recv_frame__ = 0x18FF1000  # IC -> SC
         self.__automatic_control_send_frame__ = 0x18FF1003  # IC -> SC
         self.__under_utils_data_frame__ = 0x18FF1004  # CD -> SC
-        self.__equipment_coord_frame_left__ = 0x33  # CD -> IC/SC
-        self.__equipment_coord_frame_right__ = 0x55  # CD -> IC/SC
-        self.__equipment_coord_frame_left_altitude__ = 0x44  # CD -> IC/SC
-        self.__equipment_coord_frame_right_altitude__ = 0x66
+        self.__equipment_coord_frame_left__ = 0x18FF5010  # CD -> IC/SC
+        self.__equipment_coord_frame_right__ = 0x18FF5020  # CD -> IC/SC
+        self.__equipment_coord_frame_left_altitude__ = 0x18FF5011  # CD -> IC/SC
+        self.__equipment_coord_frame_right_altitude__ = 0x18FF5021
 
         self.__automatic_control__: str = 'none'
         self.__under_utils_data_transmit__: str = 'none'
         self.__under_utils_data_number__: int = 0
-        self.__equipment_pos__: np.ndarray = np.zeros(4, dtype=np.uint32)  # gps_1_x, gps_1_y, gps_2_x, gps_2_y
-        self.__equipment_altitude__: np.ndarray = np.zeros(2, dtype=np.int32) # gps_1_altitude, gps_2_altitude
+        self.__equipment_raw_pos__: np.ndarray = np.zeros(4, dtype=np.uint32)  # gps_1_y, gps_1_x, gps_2_y, gps_2_x
+        self.__equipment_cal_pos__:np.ndarray = np.zeros(4, dtype=np.float32)
+        self.__equipment_altitude__: np.ndarray = np.zeros(2, dtype=np.flaot32) # gps_1_altitude, gps_2_altitude
         self.__position_data__: int = [0]*3  # x_pos, y_pos, z_pos
 
         self.__class__.get_under_utils_data.called = False
@@ -79,19 +80,24 @@ class MsgParser:
 
     def get_equipment_pos(self, arbitration_id: int, payload: []):
         if arbitration_id == self.__equipment_coord_frame_left__:
-            self.__equipment_pos__[0:2] = np.array([int.from_bytes(payload[4:8], byteorder='little'),
-                                                    int.from_bytes(payload[0:4], byteorder='little')])
+            self.__equipment_raw_pos__[0:2] = np.array([int.from_bytes(payload[0:4], byteorder='little'),
+                                                        int.from_bytes(payload[4:8], byteorder='little')])
 
         if arbitration_id == self.__equipment_coord_frame_right__:
-            self.__equipment_pos__[2:4] = np.array([int.from_bytes(payload[4:8], byteorder='little'),
-                                                    int.from_bytes(payload[0:4], byteorder='little')])
+            self.__equipment_raw_pos__[2:4] = np.array([int.from_bytes(payload[0:4], byteorder='little'),
+                                                        int.from_bytes(payload[4:8], byteorder='little')])
 
         if arbitration_id == self.__equipment_coord_frame_left_altitude__:
-            self.__equipment_altitude__[0] = int.from_bytes(payload[0:2], byteorder='little', signed='True')
+            self.__equipment_altitude__[0] = int.from_bytes(payload[0:2], byteorder='little', signed='True')*0.01
 
         if arbitration_id == self.__equipment_coord_frame_left_altitude__:
-            self.__equipment_altitude__[1] = int.from_bytes(payload[0:2], byteorder='little', signed='True')
+            self.__equipment_altitude__[1] = int.from_bytes(payload[0:2], byteorder='little', signed='True')*0.01
             
+        self.__equipment_cal_pos__[0] = 36+(self.__equipment_raw_pos__[0]*(10**-8))
+        self.__equipment_cal_pos__[1] = 126+(self.__equipment_raw_pos__[1]*(10**-8))
+        self.__equipment_cal_pos__[2] = 36+(self.__equipment_raw_pos__[2]*(10**-8))
+        self.__equipment_cal_pos__[3] = 126+(self.__equipment_raw_pos__[3]*(10**-8))
+
     def create_estimated_position_can_msg(self, control_flag: int = 0, state_flag: int = 0, x_pos: float = 0.0, 
                                           y_pos: float = 0.0, z_pos: float = 0.0):
 
@@ -118,18 +124,15 @@ class MsgParser:
         elif parameter_name == 'under_utils_data_number':
             return self.__under_utils_data_number__
 
-        elif parameter_name == 'equipment_pos_raw':
-            return self.__equipment_pos__
+        elif parameter_name == 'equipment_raw_pos':
+            return self.__equipment_raw_pos__
 
-        elif parameter_name == 'equipment_right_pos_data':
-            equipment_pos = self.__equipment_pos__[2]*(10**-8)
-            deg = int(equipment_pos//1)
-            miniute = int(((equipment_pos%1)*60)//1)
-            second = (((equipment_pos%1)*60)-miniute)*60
-            
-            return deg, miniute, second
+        elif parameter_name == 'equipment_cal_pos_data':
+             return self.__equipment_cal_pos__[0], self.__equipment_cal_pos__[1], self.__equipment_cal_pos__[2], self.__equipment_cal_pos__[3]
+                    
+        elif parameter_name == 'equipment_altitude':
+            return self.__equipment_altitude__
         
         elif parameter_name == 'under_utils_coord_data':
             return self.__under_utils_coord_data__
-        
         
