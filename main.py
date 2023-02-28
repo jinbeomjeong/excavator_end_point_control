@@ -1,30 +1,27 @@
-import time, threading
-from can.interfaces.pcan import PcanBus as pcan
+import time, threading, can
 from utils.predcit_api import predict_control
 from utils.sensor import InclinometerSensor
 from utils.end_point_kinematics import end_point_kinematics
 from utils.udp_lib import UdpClientCom
 from utils.can_msg_parser import MsgParser
 
-boom_pitch: float = 0.0
-arm_pitch: float = 0.0
-bucket_pitch: float = 0.0
+
 boom_pitch_pred: float = 0.0
 arm_pitch_pred: float = 0.0
 bucket_pitch_pred: float = 0.0
 
+boom_sensor = InclinometerSensor(arbitration_id=0x10FF5384)
+arm_sensor = InclinometerSensor(arbitration_id=0x10FF5385)
+bucket_sensor = InclinometerSensor(arbitration_id=0x10FF5386)
+
 
 def acquisition_inclinometer():
-    global boom_pitch, arm_pitch, bucket_pitch, boom_pitch_pred, arm_pitch_pred, bucket_pitch_pred
-    bus = pcan(bitrate=250000)
-    sensor_boom = InclinometerSensor(arbitration_id=0x10FF5384)
-    sensor_arm = InclinometerSensor(arbitration_id=0x10FF5385)
-    sensor_bucket = InclinometerSensor(arbitration_id=0x10FF5386)
+    bus = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
 
     for message in bus:
-        boom_pitch, boom_roll, boom_yaw, boom_temp = sensor_boom.payload_paser(packet=message)
-        arm_pitch, arm_roll, arm_yaw, arm_temp = sensor_arm.payload_paser(packet=message)
-        bucket_pitch, bucket_roll, bucket_yaw, bucket_temp = sensor_bucket.payload_paser(packet=message)
+        boom_sensor.get_sensor_values(packet=message)
+        arm_sensor.get_sensor_values(packet=message)
+        bucket_sensor.get_sensor_values(packet=message)
 
 
 def heartbeat():
@@ -50,6 +47,10 @@ udp_handle = UdpClientCom(address='192.168.137.1', port=6340)
 can_msg_handle = MsgParser()
 
 while True:
+    boom_pitch = boom_sensor.read_sensor_value('x_axis')
+    arm_pitch = arm_sensor.read_sensor_value('x_axis')
+    bucket_pitch = bucket_sensor.read_sensor_value('x_axis')
+
     boom_pitch_pred = (0.5*boom_pitch_pred)+(0.5*boom_pitch)
     arm_pitch_pred = (0.5*arm_pitch_pred)+(0.5*arm_pitch)
     bucket_pitch_pred = (0.5*bucket_pitch_pred)+(0.5*bucket_pitch)
@@ -63,5 +64,5 @@ while True:
            f'{predict_signal:.1f}']
 
     udp_handle.send_msg(','.join(msg))
-    can_msg_handle.send_estimated_position(control_flag=0, state_flag=0, x_pos=x_pos, y_pos=0, z_pos=z_pos)
+    can_msg_handle.create_estimated_position_can_msg(control_flag=0, state_flag=0, x_pos=x_pos, y_pos=0, z_pos=z_pos)
     time.sleep(0.05)
