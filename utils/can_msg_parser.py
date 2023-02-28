@@ -19,13 +19,13 @@ class MsgParser:
         self.__under_utils_data_transmit__: str = 'none'
         self.__under_utils_data_number__: int = 0
         self.__equipment_raw_pos__: np.ndarray = np.zeros(4, dtype=np.uint32)  # gps_1_y, gps_1_x, gps_2_y, gps_2_x
-        self.__equipment_cal_pos__:np.ndarray = np.zeros(4, dtype=np.float32)
-        self.__equipment_altitude__: np.ndarray = np.zeros(2, dtype=np.flaot32) # gps_1_altitude, gps_2_altitude
-        self.__position_data__: int = [0]*3  # x_pos, y_pos, z_pos
+        self.__equipment_cal_pos__: np.ndarray = np.zeros(4, dtype=np.float32)
+        self.__equipment_altitude__: np.ndarray = np.zeros(2, dtype=np.float32)  # gps_1_altitude, gps_2_altitude
+        self.__position_data__: [] = [0]*3  # x_pos, y_pos, z_pos
 
         self.__class__.get_under_utils_data.called = False
 
-    def get_automatic_control(self, arbitration_id: int, payload: []) -> str:
+    def get_automatic_control(self, arbitration_id: int, payload: []):
         if arbitration_id == self.__automatic_control_recv_frame__:
             if payload[0] == 0:
                 self.__automatic_control__ = 'off'
@@ -88,10 +88,10 @@ class MsgParser:
                                                         int.from_bytes(payload[4:8], byteorder='little')])
 
         if arbitration_id == self.__equipment_coord_frame_left_altitude__:
-            self.__equipment_altitude__[0] = int.from_bytes(payload[0:2], byteorder='little', signed='True')*0.01
+            self.__equipment_altitude__[0] = int.from_bytes(payload[0:2], byteorder='little', signed=True)*0.01
 
         if arbitration_id == self.__equipment_coord_frame_left_altitude__:
-            self.__equipment_altitude__[1] = int.from_bytes(payload[0:2], byteorder='little', signed='True')*0.01
+            self.__equipment_altitude__[1] = int.from_bytes(payload[0:2], byteorder='little', signed=True)*0.01
             
         self.__equipment_cal_pos__[0] = 36+(self.__equipment_raw_pos__[0]*(10**-8))
         self.__equipment_cal_pos__[1] = 126+(self.__equipment_raw_pos__[1]*(10**-8))
@@ -128,7 +128,8 @@ class MsgParser:
             return self.__equipment_raw_pos__
 
         elif parameter_name == 'equipment_cal_pos_data':
-             return self.__equipment_cal_pos__[0], self.__equipment_cal_pos__[1], self.__equipment_cal_pos__[2], self.__equipment_cal_pos__[3]
+            return self.__equipment_cal_pos__[0], self.__equipment_cal_pos__[1], self.__equipment_cal_pos__[2],\
+                self.__equipment_cal_pos__[3]
                     
         elif parameter_name == 'equipment_altitude':
             return self.__equipment_altitude__

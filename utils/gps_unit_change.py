@@ -1,4 +1,6 @@
 import math
+import numpy as np
+
 
 m_arScaleFactor = 1
 m_arLonCenter = 2.21661859489632
@@ -23,8 +25,8 @@ m_dDstInd = 0.0
 
 
 def gps_unit_change(E_d, N_d):
-    lon = E_d * math.pi / 180
-    lat = N_d * math.pi / 180
+    lon = np.deg2rad(E_d)
+    lat = np.deg2rad(N_d)
 
     delta_lon = lon - m_arLonCenter
     sin_phi = math.sin(lat)

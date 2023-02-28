@@ -1,5 +1,8 @@
-import can, time, threading
+import can, time, threading, os, sys
 import numpy as np
+
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+
 from utils.can_msg_parser import MsgParser
 
 
