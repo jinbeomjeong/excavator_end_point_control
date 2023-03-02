@@ -21,12 +21,14 @@ class SafetyControlMsgParser:
         self.__equipment_raw_pos__: np.ndarray = np.zeros(4, dtype=np.uint32)  # gps_1_y, gps_1_x, gps_2_y, gps_2_x
         self.__equipment_cal_pos__: np.ndarray = np.zeros(4, dtype=np.float32)
         self.__equipment_altitude__: np.ndarray = np.zeros(2, dtype=np.float32)  # gps_1_altitude, gps_2_altitude
-        self.__position_data__: [] = [0]*3  # x_pos, y_pos, z_pos
+        self.__bucket_position_data__: [int] = [0]*3  # x_pos, y_pos, z_pos
 
         self.__class__.get_under_utils_data.called = False
 
-    def get_automatic_control(self, arbitration_id: int, payload: []):
-        if arbitration_id == self.__automatic_control_recv_id__:
+    def get_automatic_control(self, packet):
+        if packet.arbitration_id == self.__automatic_control_recv_id__:
+            payload = packet.data
+
             if payload[0] == 0:
                 self.__automatic_control__ = 'off'
             elif payload[0] == 1:
@@ -34,8 +36,10 @@ class SafetyControlMsgParser:
             elif payload[0] == 2:
                 self.__automatic_control__ = 'on'
 
-    def get_under_utils_status(self, arbitration_id: int, payload: []):
-        if arbitration_id == self.__under_utils_data_id__:
+    def get_under_utils_status(self, packet):
+        if packet.arbitration_id == self.__under_utils_data_id__:
+            payload = packet.data
+
             if payload[0] == 0:
                 self.__automatic_control__ = 'off'
             elif payload[0] == 1:
@@ -52,7 +56,10 @@ class SafetyControlMsgParser:
 
             self.__under_utils_data_number__ = payload[2]
 
-    def get_under_utils_data(self, arbitration_id: int, payload: []):
+    def get_under_utils_data(self, packet):
+        arbitration_id = packet.arbitration_id
+        payload = packet.data
+
         if not self.__class__.get_under_utils_data.called:
             self.__under_utils_coord_id__ = np.zeros(self.__under_utils_data_number__, dtype=np.uint32)
             self.__under_utils_depth_id__ = np.zeros(self.__under_utils_data_number__, dtype=np.uint32)
@@ -78,7 +85,10 @@ class SafetyControlMsgParser:
                     self.__under_utils_depth_data__[int(hex(arbitration_id)[9]), 2:4] = \
                         np.array(int.from_bytes(payload[0:2], byteorder='little'), payload[2])
 
-    def get_equipment_pos(self, arbitration_id: int, payload: []):
+    def get_equipment_pos(self, packet):
+        arbitration_id = packet.arbitration_id
+        payload = packet.data
+
         if arbitration_id == self.__equipment_coord_frame_left_id__:
             self.__equipment_raw_pos__[0:2] = np.array([int.from_bytes(payload[0:4], byteorder='little'),
                                                         int.from_bytes(payload[4:8], byteorder='little')])
@@ -102,11 +112,11 @@ class SafetyControlMsgParser:
                                           y_pos: float = 0.0, z_pos: float = 0.0):
 
         for i, data in enumerate([x_pos, y_pos, z_pos]):
-            self.__position_data__[i] = (int((data*100)+5400))
+            self.__bucket_position_data__[i] = (int((data*100)+5400))
 
-        x_pos_msb, x_pos_lsb = self.__position_data__[0].to_bytes(2, byteorder='little')
-        y_pos_msb, y_pos_lsb = self.__position_data__[1].to_bytes(2, byteorder='little')
-        z_pos_msb, z_pos_lsb = self.__position_data__[2].to_bytes(2, byteorder='little')
+        x_pos_msb, x_pos_lsb = self.__bucket_position_data__[0].to_bytes(2, byteorder='little')
+        y_pos_msb, y_pos_lsb = self.__bucket_position_data__[1].to_bytes(2, byteorder='little')
+        z_pos_msb, z_pos_lsb = self.__bucket_position_data__[2].to_bytes(2, byteorder='little')
         __send_data__ = [control_flag, state_flag, x_pos_msb, x_pos_lsb, y_pos_msb, y_pos_lsb, z_pos_msb, z_pos_lsb]
 
         send_msg = can.Message(arbitration_id=self.__automatic_control_send_id__, data=__send_data__,
@@ -148,7 +158,10 @@ class JoystickMsgParser:
         self.__left_joystick_can_id__ = 0x18FF6381
         self.__right_joystick_can_id__ = 0x18FF6382
 
-    def get_joystick_status(self, arbitration_id: int, payload: []):
+    def get_joystick_values(self, packet):
+        arbitration_id = packet.arbitration_id
+        payload = packet.data
+
         if arbitration_id == self.__left_joystick_can_id__:
             self.__left_x_position__ = payload[1]
             self.__left_y_position__ = payload[3]
@@ -157,7 +170,7 @@ class JoystickMsgParser:
             self.__right_x_position__ = payload[1]
             self.__right_y_position__ = payload[3]
 
-    def read_joystick_value(self, parameter_name=''):
+    def read_joystick_value(self, parameter_name='') -> float:
         if parameter_name == 'left_x_position':
             return self.__left_x_position__
 
