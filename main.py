@@ -1,9 +1,8 @@
 import time, threading, can
 from utils.predcit_api import predict_control
-from utils.sensor import InclinometerSensor
 from utils.end_point_kinematics import end_point_kinematics
 from utils.udp_lib import UdpClientCom
-from utils.can_msg_parser import MsgParser
+from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor
 
 
 boom_pitch_pred: float = 0.0
@@ -16,12 +15,19 @@ bucket_sensor = InclinometerSensor(arbitration_id=0x10FF5386)
 
 
 def acquisition_inclinometer():
-    bus = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
+    can_ch1 = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
 
-    for message in bus:
+    for message in can_ch1:
         boom_sensor.get_sensor_values(packet=message)
         arm_sensor.get_sensor_values(packet=message)
         bucket_sensor.get_sensor_values(packet=message)
+
+
+def joystick_status():
+    can_ch2 = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS2', bitrate=250000)
+
+    for message in can_ch2:
+        pass
 
 
 def heartbeat():
@@ -39,12 +45,16 @@ acquire_thread = threading.Thread(target=acquisition_inclinometer)
 acquire_thread.daemon = True
 acquire_thread.start()
 
+acquire_thread = threading.Thread(target=joystick_status)
+acquire_thread.daemon = True
+acquire_thread.start()
+
 heart_beat_thread = threading.Timer(interval=0.1, function=heartbeat)
 heart_beat_thread.daemon = True
 heart_beat_thread.start()
 
 udp_handle = UdpClientCom(address='192.168.137.1', port=6340)
-can_msg_handle = MsgParser()
+can_msg_handle = SafetyControlMsgParser()
 
 while True:
     boom_pitch = boom_sensor.read_sensor_value('x_axis')

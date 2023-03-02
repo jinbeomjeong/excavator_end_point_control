@@ -5,15 +5,15 @@ import numpy as np
 np.set_printoptions(suppress=True)
 
 
-class MsgParser:
+class SafetyControlMsgParser:
     def __init__(self):
-        self.__automatic_control_recv_frame__ = 0x18FF1000  # IC -> SC
-        self.__automatic_control_send_frame__ = 0x18FF1003  # IC -> SC
-        self.__under_utils_data_frame__ = 0x18FF1004  # CD -> SC
-        self.__equipment_coord_frame_left__ = 0x18FF5010  # CD -> IC/SC
-        self.__equipment_coord_frame_right__ = 0x18FF5020  # CD -> IC/SC
-        self.__equipment_coord_frame_left_altitude__ = 0x18FF5011  # CD -> IC/SC
-        self.__equipment_coord_frame_right_altitude__ = 0x18FF5021
+        self.__automatic_control_recv_id__ = 0x18FF1000  # IC -> SC
+        self.__automatic_control_send_id__ = 0x18FF1003  # IC -> SC
+        self.__under_utils_data_id__ = 0x18FF1004  # CD -> SC
+        self.__equipment_coord_frame_left_id__ = 0x18FF5010  # CD -> IC/SC
+        self.__equipment_coord_frame_right_id__ = 0x18FF5020  # CD -> IC/SC
+        self.__equipment_coord_frame_left_altitude_id__ = 0x18FF5011  # CD -> IC/SC
+        self.__equipment_coord_frame_right_altitude_id__ = 0x18FF5021
 
         self.__automatic_control__: str = 'none'
         self.__under_utils_data_transmit__: str = 'none'
@@ -26,7 +26,7 @@ class MsgParser:
         self.__class__.get_under_utils_data.called = False
 
     def get_automatic_control(self, arbitration_id: int, payload: []):
-        if arbitration_id == self.__automatic_control_recv_frame__:
+        if arbitration_id == self.__automatic_control_recv_id__:
             if payload[0] == 0:
                 self.__automatic_control__ = 'off'
             elif payload[0] == 1:
@@ -35,7 +35,7 @@ class MsgParser:
                 self.__automatic_control__ = 'on'
 
     def get_under_utils_status(self, arbitration_id: int, payload: []):
-        if arbitration_id == self.__under_utils_data_frame__:
+        if arbitration_id == self.__under_utils_data_id__:
             if payload[0] == 0:
                 self.__automatic_control__ = 'off'
             elif payload[0] == 1:
@@ -79,18 +79,18 @@ class MsgParser:
                         np.array(int.from_bytes(payload[0:2], byteorder='little'), payload[2])
 
     def get_equipment_pos(self, arbitration_id: int, payload: []):
-        if arbitration_id == self.__equipment_coord_frame_left__:
+        if arbitration_id == self.__equipment_coord_frame_left_id__:
             self.__equipment_raw_pos__[0:2] = np.array([int.from_bytes(payload[0:4], byteorder='little'),
                                                         int.from_bytes(payload[4:8], byteorder='little')])
 
-        if arbitration_id == self.__equipment_coord_frame_right__:
+        if arbitration_id == self.__equipment_coord_frame_right_id__:
             self.__equipment_raw_pos__[2:4] = np.array([int.from_bytes(payload[0:4], byteorder='little'),
                                                         int.from_bytes(payload[4:8], byteorder='little')])
 
-        if arbitration_id == self.__equipment_coord_frame_left_altitude__:
+        if arbitration_id == self.__equipment_coord_frame_left_altitude_id__:
             self.__equipment_altitude__[0] = int.from_bytes(payload[0:2], byteorder='little', signed=True)*0.01
 
-        if arbitration_id == self.__equipment_coord_frame_left_altitude__:
+        if arbitration_id == self.__equipment_coord_frame_left_altitude_id__:
             self.__equipment_altitude__[1] = int.from_bytes(payload[0:2], byteorder='little', signed=True)*0.01
             
         self.__equipment_cal_pos__[0] = 36+(self.__equipment_raw_pos__[0]*(10**-8))
@@ -109,7 +109,7 @@ class MsgParser:
         z_pos_msb, z_pos_lsb = self.__position_data__[2].to_bytes(2, byteorder='little')
         __send_data__ = [control_flag, state_flag, x_pos_msb, x_pos_lsb, y_pos_msb, y_pos_lsb, z_pos_msb, z_pos_lsb]
 
-        send_msg = can.Message(arbitration_id=self.__automatic_control_send_frame__, data=__send_data__,
+        send_msg = can.Message(arbitration_id=self.__automatic_control_send_id__, data=__send_data__,
                                is_extended_id=True)
 
         return send_msg
@@ -136,4 +136,68 @@ class MsgParser:
         
         elif parameter_name == 'under_utils_coord_data':
             return self.__under_utils_coord_data__
-        
+
+
+class JoystickMsgParser:
+    def __init__(self):
+        self.__left_x_position__: float = 0.0
+        self.__left_y_position__: float = 0.0
+        self.__right_x_position__: float = 0.0
+        self.__right_y_position__: float = 0.0
+
+        self.__left_joystick_can_id__ = 0x18FF6381
+        self.__right_joystick_can_id__ = 0x18FF6382
+
+    def get_joystick_status(self, arbitration_id: int, payload: []):
+        if arbitration_id == self.__left_joystick_can_id__:
+            self.__left_x_position__ = payload[1]
+            self.__left_y_position__ = payload[3]
+
+        if arbitration_id == self.__right_joystick_can_id__:
+            self.__right_x_position__ = payload[1]
+            self.__right_y_position__ = payload[3]
+
+    def read_joystick_value(self, parameter_name=''):
+        if parameter_name == 'left_x_position':
+            return self.__left_x_position__
+
+        elif parameter_name == 'left_y_position':
+            return self.__left_y_position__
+
+        elif parameter_name == 'right_x_position':
+            return self.__right_x_position__
+
+        elif parameter_name == 'right_y_position':
+            return self.__right_y_position__
+
+
+class InclinometerSensor:
+    def __init__(self, arbitration_id):
+        self.__arbitration_id__ = arbitration_id
+        self.__x_axis__: float = 0
+        self.__y_axis__: float = 0
+        self.__z_axis__: float = 0
+        self.__temp__: float = 0
+
+    def get_sensor_values(self, packet):
+        if packet.arbitration_id == self.__arbitration_id__:
+            msg_hex = packet.data.hex()
+
+            if len(msg_hex) == 16:
+                self.__x_axis__ = (float(int(msg_hex[0:4], base=16)) / 16384) * 90
+                self.__x_axis__ = (float(int(msg_hex[4:8], base=16)) / 16384) * 90
+                self.__z_axis__ = (float(int(msg_hex[8:12], base=16)) / 16384) * 90
+                self.__temp__ = -273 + (int(msg_hex[12:16], base=16) / 18.9)
+
+    def read_sensor_value(self, parameter_name='') -> float:
+        if parameter_name == 'x_axis':
+            return self.__x_axis__
+
+        elif parameter_name == 'y_axis':
+            return self.__y_axis__
+
+        elif parameter_name == 'z_axis':
+            return self.__z_axis__
+
+        elif parameter_name == 'temp':
+            return self.__temp__
