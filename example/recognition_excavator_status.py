@@ -1,9 +1,9 @@
-import sys, os, can, threading
-import time
+import sys, os, can, threading, time
 
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
 from utils.can_msg_parser import SafetyControlMsgParser, JoystickMsgParser, InclinometerSensor
+from utils.recognition_work_status import recognition_excavator_work_status
 
 
 can_ch1 = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
@@ -54,24 +54,6 @@ def main() -> None:
 
         gps_ch1_latitude, gps_ch1_longitude, gps_ch2_latitude, gps_ch2_longitude = \
             safety_control_status.read_variable('equipment_cal_pos_data')
-
-        '''
-        def recognition_excavator_work_status(boom_pitch, arm_pitch, bucket_pitch,
-                                              left_joystick_x_pos, left_joystick_y_pos,
-                                              right_joystick_x_pos, right_joystick_y_pos,
-                                              gps_ch1_latitude, gps_ch1_longitude,
-                                              gps_ch2_latitude, gps_ch2_longitude) -> int:
-        
-            put code here!
-
-            legend of output value
-            00: stand by
-            01: movement state
-            02: working state
-            03: anomaly state
-        
-            return excavator_work_status
-        '''
 
         excavator_work_status = recognition_excavator_work_status(boom_pitch, arm_pitch, bucket_pitch,
                                                                   left_joystick_x_pos, left_joystick_y_pos,
