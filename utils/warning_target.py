@@ -83,8 +83,8 @@ def get_distance(origin, target):
 
 @jit(nopython=True, cache=True)
 def get_distance_opt(origin: np.ndarray, target: np.ndarray, threshold: float):
-    dis_arr = np.zeros(target.shape[0])
-    dis_bool = np.zeros(target.shape[0])
+    dis_arr = np.zeros(target.shape[0], dtype=np.float32)
+    dis_bool = np.zeros(target.shape[0], dtype=np.uint8)
 
     for i, pos in enumerate(target):
         dis_arr[i] = np.sqrt(np.power(origin[0]-pos[0], 2) + np.power(origin[1]-pos[1], 2))
