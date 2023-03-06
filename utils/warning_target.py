@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial import distance
+from numba import jit
 
 
 class TargetDepth:
@@ -78,6 +79,20 @@ def get_distance(origin, target):
         dis_arr[i] = distance.euclidean(origin, pos)
 
     return dis_arr
+
+
+@jit(nopython=True, cache=True)
+def get_distance_opt(origin: np.ndarray, target: np.ndarray, threshold: float):
+    dis_arr = np.zeros(target.shape[0])
+    dis_bool = np.zeros(target.shape[0])
+
+    for i, pos in enumerate(target):
+        dis_arr[i] = np.sqrt(np.power(origin[0]-pos[0], 2) + np.power(origin[1]-pos[1], 2))
+        dis_bool[i] = int(dis_arr[i] < threshold)
+
+    in_work = np.any(dis_bool)
+
+    return dis_arr, in_work
 
 
 def get_end_pos(origin, y_distance, heading):
