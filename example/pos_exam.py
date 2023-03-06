@@ -1,11 +1,11 @@
 import time, can
 import numpy as np
 import pandas as pd
-from utils.can_msg_parser import MsgParser
-from utils.warning_target import get_target_boundary, get_distance, TargetDepth, get_end_pos
+from utils.can_msg_parser import SafetyControlMsgParser
+from utils.warning_target import get_target_boundary, get_distance, TargetDepth
 from utils.tcp_lib import TCPClient
 
-can_msg_parser = MsgParser()
+can_msg_parser = SafetyControlMsgParser()
 
 radius: float = 1.0
 safety_level: float = 2.0
@@ -45,4 +45,5 @@ while True:
     dis1 = get_distance([x_pos, y_pos], target_boundary[0])
     dis2 = get_distance([x_pos, y_pos], target_boundary[1])
     dis = np.append(dis1, dis2)
-    bus.send(can_msg_parser.create_estimated_position(control_flag=1, state_flag=1, x_pos=x_pos, y_pos=y_pos, z_pos=0))
+    bus.send(can_msg_parser.create_estimated_position_can_msg(control_flag=1, state_flag=1,
+                                                              x_pos=x_pos, y_pos=y_pos, z_pos=0))

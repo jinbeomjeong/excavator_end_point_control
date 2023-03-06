@@ -112,7 +112,7 @@ class SafetyControlMsgParser:
                                           y_pos: float = 0.0, z_pos: float = 0.0):
 
         for i, data in enumerate([x_pos, y_pos, z_pos]):
-            self.__bucket_position_data__[i] = (int((data*100)+5400))
+            self.__bucket_position_data__[i] = int((data*100)+5400)
 
         x_pos_msb, x_pos_lsb = self.__bucket_position_data__[0].to_bytes(2, byteorder='little')
         y_pos_msb, y_pos_lsb = self.__bucket_position_data__[1].to_bytes(2, byteorder='little')
