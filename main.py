@@ -93,11 +93,11 @@ class Logging:
     def __init__(self, file_name='Logging_Data'):
         logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle', 'arm_angle', 'bucket_angle',
                                                'joystick_left_x_pos', 'joystick_left_y_pos',
-                                               'joystick_right_x_pos', 'joystick_right_y_pos'
+                                               'joystick_right_x_pos', 'joystick_right_y_pos',
                                                'excavator_global_x_pos', 'excavator_global_y_pos',
                                                'excavator_heading', 'bucket_goal_x_pos', 'bucket_goal_y_pos',
-                                               'bucket_depth', 'excavator_work_state', 'control_state'
-                                               'target_pipe_depth', 'gps_1_latitude', 'gps_1_longitude'
+                                               'bucket_depth', 'excavator_work_state', 'control_state',
+                                               'target_pipe_depth', 'gps_1_latitude', 'gps_1_longitude',
                                                'gps_2_latitude', 'gps_2_longitude'])
 
         start_time_str = time.strftime('%Y%m%d-%H%M%S', time.localtime(time.time()))
