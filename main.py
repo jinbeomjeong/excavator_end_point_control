@@ -1,5 +1,6 @@
 import time, threading, can
 import numpy as np
+import pandas as pd
 from utils.accessory_lib import system_info
 from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, find_center
@@ -47,6 +48,9 @@ angle_sensor_offset = np.array([276.3, 270.0, 270], dtype=np.double)  # offset o
 excavator_pos = np.zeros(3, dtype=np.double)  # latitude, longitude, heading
 est_pipe_depth = TargetDepth(target_pos=[], target_depth=[])
 
+logging_data: pd.DataFrame = pd.DataFrame()
+elapsed_time: float = 0.0
+
 
 def can_com():
     global cd_query, pipe_coord, pipe_depth, est_pipe_depth, receive_state, done_state
@@ -85,9 +89,45 @@ def can_com():
                 done_state = False
 
 
+class Logging:
+    def __init__(self, file_name='Logging_Data'):
+        logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle', 'arm_angle', 'bucket_angle',
+                                               'joystick_left_x_pos', 'joystick_left_y_pos',
+                                               'joystick_right_x_pos', 'joystick_right_y_pos'
+                                               'excavator_global_x_pos', 'excavator_global_y_pos',
+                                               'excavator_heading', 'bucket_goal_x_pos', 'bucket_goal_y_pos',
+                                               'bucket_depth', 'excavator_work_state', 'control_state'
+                                               'target_pipe_depth', 'gps_1_latitude', 'gps_1_longitude'
+                                               'gps_2_latitude', 'gps_2_longitude'])
+
+        start_time_str = time.strftime('%Y%m%d-%H%M%S', time.localtime(time.time()))
+        logging_file_name = file_name + '_' + start_time_str
+        self.logging_file_path = './logging_data/' + logging_file_name + '.csv'
+        logging_header.to_csv(self.logging_file_path, mode='a', header=True)
+
+    def start_logging(self, period=0.1):
+        global logging_data
+        logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(pred_angle[0], 2), '3': round(pred_angle[1], 2),
+                                     '4': round(pred_angle[2], 2), '5': joystick_pos[0], '6': joystick_pos[1],
+                                     '7': joystick_pos[2], '8': joystick_pos[3], '9': excavator_pos[0],
+                                     '10': excavator_pos[1], '11': excavator_pos[2], '12': bucket_global_pos[0],
+                                     '13': bucket_global_pos[1], '14': bucket_local_pos[2], '15': excavator_work_state,
+                                     '16': control_state, '17': target_pipe_depth,
+                                     '18': gps_coord[0], '19': gps_coord[1], '20': gps_coord[2], '21': gps_coord[3]},
+                                    index=[0])
+
+        logging_data.to_csv(self.logging_file_path, mode='a', header=False)
+        logging_thread = threading.Timer(period, self.start_logging, (period,))
+        logging_thread.daemon = True
+        logging_thread.start()
+
+
 can_com_task = threading.Thread(target=can_com)
 can_com_task.daemon = True
 can_com_task.start()
+
+logging_task = Logging(file_name='Logging_Data')
+logging_task.start_logging(period=0.1)
 
 # set stand-by state change of safety controller
 system_info()
@@ -100,12 +140,11 @@ while True:
 '''
 
 # create interpolated pipe data
-
+start_time = time.time()
 print('algorithm is running...')
 
 while True:
-    print(pipe_coord)
-    print(pipe_depth)
+    elapsed_time = time.time() - start_time
 
     # acquisition excavator position
     for i, cal_pos in enumerate(safety_control_msg.read_variable('equipment_cal_pos_data')):
@@ -142,8 +181,9 @@ while True:
     # get target pipe depth
     if safety_control_msg.read_variable('work_limit') == 'de-active':
         target_pipe_depth = 0
-    else: pass
-    # target_pipe_depth = est_pipe_depth.get_target_depth(current_pos=bucket_global_pos)
+    else:
+        pass
+        # target_pipe_depth = est_pipe_depth.get_target_depth(current_pos=bucket_global_pos)
 
     # safety control of bucket position
     if control_state == 0:
@@ -160,9 +200,12 @@ while True:
         else:
             control_state = 1
 
-    if bucket_safety_status: safety_state = 1
-    elif control_state: safety_state = 2
-    else: safety_state = 0
+    if bucket_safety_status:
+        safety_state = 1
+    elif control_state:
+        safety_state = 2
+    else:
+        safety_state = 0
 
     # create message of safety controller
     msg_set.append(safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=0, excavator_state=2))
