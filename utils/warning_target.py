@@ -4,20 +4,19 @@ from numba import jit
 
 
 class TargetDepth:
-    def __init__(self, target_pos, target_depth):
+    def __init__(self, target_pos: np.ndarray, target_depth: np.ndarray):  # target_pos: np.ndarray of n*2
         self.target_pos = target_pos
         self.target_depth = target_depth
+        self.depth = np.zeros(2, dtype=np.double)
 
-    def get_target_depth(self, current_pos):
-        depth = np.zeros(2)
-
+    def get_target_depth(self, current_pos: np.ndarray): # current_pos: np.ndarray of len 2
         for i, pos in enumerate(current_pos):
-            depth[i] = np.interp(pos, self.target_pos[:, i], self.target_depth)
+            self.depth[i] = np.interp(pos, self.target_pos[:, i], self.target_depth)
 
-        return np.min(depth)
+        return np.min(self.depth)
 
 
-def interp_2d_target(target_pos, step) -> np.ndarray:
+def interp_2d_target(target_pos: np.ndarray, step) -> np.ndarray:  # target_pos: np.ndarray of n*2
     x_output = np.array([])
     y_output = np.array([])
 
@@ -34,8 +33,9 @@ def interp_2d_target(target_pos, step) -> np.ndarray:
     return target_interp_pos
 
 
-def get_target_boundary(target_pos, radius, step=10) -> np.ndarray:
-    radius = radius/2
+def get_target_boundary(target_pos: np.ndarray, radius: np.ndarray, step: int = 10) -> np.ndarray:
+    # target_pos: np.ndarray of n by 2, radius np.ndarray of len n
+    radius = np.divide(radius, 2)
     bound_pos_x_max = []
     bound_pos_y_max = []
     bound_pos_x_min = []
@@ -46,22 +46,22 @@ def get_target_boundary(target_pos, radius, step=10) -> np.ndarray:
         safety_dir_max = target_dir-(np.pi/2)
         safety_dir_min = target_dir+(np.pi/2)
 
-        bound_pos_x_max.append((np.sin(safety_dir_max)*radius)+target_pos[i, 0])
-        bound_pos_y_max.append((np.cos(safety_dir_max)*radius)+target_pos[i, 1])
-        bound_pos_x_min.append((np.sin(safety_dir_min)*radius)+target_pos[i, 0])
-        bound_pos_y_min.append((np.cos(safety_dir_min)*radius)+target_pos[i, 1])
+        bound_pos_x_max.append((np.sin(safety_dir_max)*radius[i])+target_pos[i, 0])
+        bound_pos_y_max.append((np.cos(safety_dir_max)*radius[i])+target_pos[i, 1])
+        bound_pos_x_min.append((np.sin(safety_dir_min)*radius[i])+target_pos[i, 0])
+        bound_pos_y_min.append((np.cos(safety_dir_min)*radius[i])+target_pos[i, 1])
 
-    bound_pos_x_max.append((np.sin(safety_dir_max)*radius+target_pos[target_pos.shape[0]-1, 0]))
-    bound_pos_y_max.append((np.cos(safety_dir_max)*radius+target_pos[target_pos.shape[0]-1, 1]))
-    bound_pos_x_min.append((np.sin(safety_dir_min)*radius+target_pos[target_pos.shape[0]-1, 0]))
-    bound_pos_y_min.append((np.cos(safety_dir_min)*radius+target_pos[target_pos.shape[0]-1, 1]))
+    # bound_pos_x_max.append((np.sin(safety_dir_max)*radius+target_pos[target_pos.shape[0]-1, 0]))
+    # bound_pos_y_max.append((np.cos(safety_dir_max)*radius+target_pos[target_pos.shape[0]-1, 1]))
+    # bound_pos_x_min.append((np.sin(safety_dir_min)*radius+target_pos[target_pos.shape[0]-1, 0]))
+    # bound_pos_y_min.append((np.cos(safety_dir_min)*radius+target_pos[target_pos.shape[0]-1, 1]))
 
     target_bound_max = np.array([bound_pos_x_max, bound_pos_y_max]).T
     target_bound_min = np.array([bound_pos_x_min, bound_pos_y_min]).T
-    target_bound_max_inter = interp_2d_target(target_bound_max, step=step)
-    target_bound_min_inter = interp_2d_target(target_bound_min, step=step)
+    target_bound_max_interp = interp_2d_target(target_bound_max, step=step)
+    target_bound_min_interp = interp_2d_target(target_bound_min, step=step)
 
-    return np.stack([target_bound_max_inter, target_bound_min_inter])
+    return np.stack([target_bound_max_interp, target_bound_min_interp])  # output: np.ndarray of 3*n*2
 
 
 def get_working_area(origin, radius):

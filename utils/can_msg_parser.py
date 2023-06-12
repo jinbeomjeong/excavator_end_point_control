@@ -86,7 +86,7 @@ class SafetyControlMsgParser:
             self.__under_utils_coord_id = np.zeros(self.__n_of_under_utils, dtype=np.uint32)
             self.__under_utils_depth_id = np.zeros(self.__n_of_under_utils, dtype=np.uint32)
             self.__under_utils_coord_data = np.zeros((self.__n_of_under_utils, 2), dtype=np.double)
-            self.__under_utils_depth_data = np.zeros((self.__n_of_under_utils, 2), dtype=np.double)
+            self.__under_utils_depth_dia_data = np.zeros((self.__n_of_under_utils, 2), dtype=np.double)
 
             for i in range(self.__n_of_under_utils):
                 self.__under_utils_coord_id[i] = int('0x18FF' + hex(i)[2:4].zfill(2) + '01', base=16)
@@ -105,7 +105,7 @@ class SafetyControlMsgParser:
 
             for depth_id in self.__under_utils_depth_id:
                 if depth_id == arbit_id:
-                    self.__under_utils_depth_data[int(hex(arbit_id)[6:8], base=16), 0:2] = \
+                    self.__under_utils_depth_dia_data[int(hex(arbit_id)[6:8], base=16), 0:2] = \
                         np.array([int.from_bytes(payload[0:2], byteorder='little')*0.01, payload[2]*0.1], dtype=np.double)
 
     def get_equip_pos(self, packet=can.Message()):
@@ -203,7 +203,7 @@ class SafetyControlMsgParser:
             return self.__under_utils_coord_id
 
         elif parameter_name == 'under_utils_depth_data':
-            return self.__under_utils_depth_data
+            return self.__under_utils_depth_dia_data
 
         elif parameter_name == 'equipment_raw_pos':
             return self.__equipment_raw_pos
