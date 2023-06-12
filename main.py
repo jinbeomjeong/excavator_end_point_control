@@ -19,6 +19,7 @@ can_channel = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=
 boom_sensor = InclinometerSensor(arbitration_id=0x10FF5383)
 arm_sensor = InclinometerSensor(arbitration_id=0x10FF5382)
 bucket_sensor = InclinometerSensor(arbitration_id=0x10FF5381)
+body_sensor = InclinometerSensor(arbitration_id=0x00)
 
 joystick_msg = JoystickMsgParser()
 safety_control_msg = SafetyControlMsgParser()
@@ -42,9 +43,9 @@ gps_coord = np.zeros(4, dtype=np.double)  # gps_1_latitude, gps_1_longitude, gps
 bucket_local_pos = np.zeros(3, dtype=np.double)  # x-axis, y-axis, z-axis
 bucket_global_pos = np.zeros(2, dtype=np.double)  # x-axis, y-axis
 joystick_pos = np.zeros(4, dtype=np.uint8)  # left_x_pos, left_y_pos, right_x_pos, right_y_pos
-excavator_angle = np.zeros(3, dtype=np.double)  # boom, arm and bucket angle
-pred_angle = np.zeros(3, dtype=np.double)  # predict of boom, arm and bucket angle
-angle_sensor_offset = np.array([276.3, 270.0, 270], dtype=np.double)  # offset of boom, arm and bucket angle
+excavator_angle = np.zeros(4, dtype=np.double)  # boom, arm and bucket angle
+pred_angle = np.zeros(4, dtype=np.double)  # predict of boom, arm and bucket angle
+angle_sensor_offset = np.array([276.3, 270.0, 270, 0], dtype=np.double)  # offset angle of boom, arm, bucket and body
 excavator_pos = np.zeros(3, dtype=np.double)  # latitude, longitude, heading
 est_pipe_depth = TargetDepth(target_pos=[], target_depth=[])
 
@@ -58,6 +59,7 @@ def can_com():
         boom_sensor.get_sensor_values(packet=can_msg)
         arm_sensor.get_sensor_values(packet=can_msg)
         bucket_sensor.get_sensor_values(packet=can_msg)
+        body_sensor.get_sensor_values(packet=can_msg)
         joystick_msg.get_joystick_values(packet=can_msg)
 
         safety_control_msg.get_ic_state(packet=can_msg)
@@ -91,7 +93,7 @@ def can_com():
 
 class Logging:
     def __init__(self, file_name='Logging_Data'):
-        logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle', 'arm_angle', 'bucket_angle',
+        logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle', 'arm_angle', 'bucket_angle', 'body_angle',
                                                'joystick_left_x_pos', 'joystick_left_y_pos',
                                                'joystick_right_x_pos', 'joystick_right_y_pos',
                                                'excavator_global_x_pos', 'excavator_global_y_pos',
@@ -107,13 +109,14 @@ class Logging:
 
     def start_logging(self, period=0.1):
         global logging_data
-        logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(pred_angle[0], 2), '3': round(pred_angle[1], 2),
-                                     '4': round(pred_angle[2], 2), '5': joystick_pos[0], '6': joystick_pos[1],
-                                     '7': joystick_pos[2], '8': joystick_pos[3], '9': excavator_pos[0],
-                                     '10': excavator_pos[1], '11': excavator_pos[2], '12': bucket_global_pos[0],
-                                     '13': bucket_global_pos[1], '14': bucket_local_pos[2], '15': excavator_work_state,
-                                     '16': control_state, '17': target_pipe_depth,
-                                     '18': gps_coord[0], '19': gps_coord[1], '20': gps_coord[2], '21': gps_coord[3]},
+        logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(pred_angle[0], 2),
+                                     '3': round(pred_angle[1], 2), '4': round(pred_angle[2], 2),
+                                     '5': round(pred_angle[3], 2), '6': joystick_pos[0], '7': joystick_pos[1],
+                                     '8': joystick_pos[2], '9': joystick_pos[3], '10': excavator_pos[0],
+                                     '11': excavator_pos[1], '12': excavator_pos[2], '13': bucket_global_pos[0],
+                                     '14': bucket_global_pos[1], '15': bucket_local_pos[2], '16': excavator_work_state,
+                                     '17': control_state, '18': target_pipe_depth,
+                                     '19': gps_coord[0], '20': gps_coord[1], '21': gps_coord[2], '22': gps_coord[3]},
                                     index=[0])
 
         logging_data.to_csv(self.logging_file_path, mode='a', header=False)
@@ -155,7 +158,7 @@ while True:
     excavator_pos[2] = calculation_heading(*gps_coord)
 
     # acquisition execution offset and execution low pass filter of angle sensor
-    for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor]):
+    for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor, body_sensor]):
         excavator_angle[i] = np.subtract(angle_sensor_name.read_sensor_value('y_axis'), angle_sensor_offset[i])
         pred_angle[i] = np.add(np.multiply(0.5, pred_angle[i]), np.multiply(0.5, excavator_angle[i]))
 
@@ -208,7 +211,8 @@ while True:
         safety_state = 0
 
     # create message of safety controller
-    msg_set.append(safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=0, excavator_state=2))
+    msg_set.append(safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
+                                                          excavator_state=excavator_work_state))
     msg_set.append(safety_control_msg.create_equip_origin_pos_msg(latitude=excavator_pos[0], longitude=excavator_pos[1]))
     msg_set.append(safety_control_msg.create_equip_heading_msg(heading=excavator_pos[2]))
     msg_set.append(safety_control_msg.create_comp_angle_msg(boom_angle=np.abs(pred_angle[0]),
