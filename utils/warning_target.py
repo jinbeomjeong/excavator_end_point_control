@@ -1,19 +1,22 @@
 import numpy as np
 from scipy.spatial import distance
 from numba import jit
+from typing import Tuple, List
 
 
 class TargetDepth:
     def __init__(self, target_pos: np.ndarray, target_depth: np.ndarray):  # target_pos: np.ndarray of n*2
         self.target_pos = target_pos
+        self.target_pos.flags.writeable = False
         self.target_depth = target_depth
-        self.depth = np.zeros(2, dtype=np.double)
+        self.target_depth.flags.writeable = False
+        self.est_depth = np.zeros(2, dtype=np.double)
 
     def get_target_depth(self, current_pos: np.ndarray):  # current_pos: np.ndarray of len 2
         for i, pos in enumerate(current_pos):
-            self.depth[i] = np.interp(pos, self.target_pos[:, i], self.target_depth)
+            self.est_depth[i] = np.interp(pos, self.target_pos[:, i], self.target_depth)
 
-        return np.min(self.depth)
+        return np.min(self.est_depth)
 
 
 def interp_2d_target(target_pos: np.ndarray, step) -> np.ndarray:  # target_pos: np.ndarray of n*2
@@ -82,7 +85,7 @@ def __get_distance(origin: np.ndarray, target: np.ndarray) -> np.ndarray:
 
 
 @jit(nopython=True, cache=True)
-def __get_distance_opt(origin: np.ndarray, target: np.ndarray, threshold: float) -> [np.ndarray, np.bool_]:
+def __get_distance_opt(origin: np.ndarray, target: np.ndarray, threshold: float) -> Tuple[np.ndarray, np.ndarray]:
     dis_arr = np.zeros(target.shape[0], dtype=np.float32)
     dis_bool = np.zeros(target.shape[0], dtype=np.uint8)
 
@@ -92,10 +95,10 @@ def __get_distance_opt(origin: np.ndarray, target: np.ndarray, threshold: float)
 
     in_work = np.any(dis_bool)
 
-    return [dis_arr, in_work]
+    return dis_arr, in_work
 
 
-def get_end_pos(origin: [], y_distance, heading) -> [np.float32, np.float32]:
+def get_end_pos(origin: List, y_distance, heading) -> Tuple[float, float]:
     heading = (heading+360) % 360
     x_pos = np.sin(np.deg2rad(heading)) * y_distance + origin[0]
     y_pos = np.cos(np.deg2rad(heading)) * y_distance + origin[1]

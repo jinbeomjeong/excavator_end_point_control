@@ -9,6 +9,7 @@ from utils.recognition_work_status import recognition_excavator_work_status as w
 from utils.warning_target import get_end_pos, get_safety_status, get_target_boundary, TargetDepth
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
+from typing import Final
 
 # tcp_handle = TCPClient(address='192.168.137.1', port=6340)
 # tcp_handle.connect_to_server()
@@ -29,25 +30,30 @@ msg_set_ic = []
 msg_get_cd = []
 control_state: int = 0
 target_pipe_depth: float = 0.0
-t0_1 = time.time()
-t0_2: float = 0.0
+t0_1: float = 0.0
 sc_state: int = 1
 safety_state: int = 0
 excavator_work_state: int = 0
 cd_query = 'none'
 receive_state = True
 done_state = True
-pipe_coord = np.zeros((1, 2), dtype=np.double)  # x-axis, y-axis
-pipe_boundary_coord: np.ndarray
+pipe_boundary_coord: np.array([])
+pipe_coords_tm: np.array([])
 pipe_depth = np.zeros(0, dtype=np.double)
 gps_coord = np.zeros(4, dtype=np.double)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
 bucket_local_pos = np.zeros(3, dtype=np.double)  # x-axis, y-axis, z-axis
 bucket_global_pos = np.zeros(2, dtype=np.double)  # x-axis, y-axis
-joystick_pos = np.zeros(4, dtype=np.uint8)  # left_x_pos, left_y_pos, right_x_pos, right_y_pos
+
+# left_x_pos, left_y_pos, right_x_pos, right_y_pos
+# left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
+joystick_pos = np.zeros(4, dtype=np.uint8)
+
 excavator_angle = np.zeros(4, dtype=np.double)  # boom, arm and bucket angle
 pred_angle = np.zeros(4, dtype=np.double)  # predict of boom, arm and bucket angle
-#angle_sensor_offset = np.array([276.3, 270.0, 270, 0], dtype=np.double)  # offset angle of boom, arm, bucket and body
+# angle_sensor_offset = np.array([276.3, 270.0, 270, 0], dtype=np.double)  # offset angle of boom, arm, bucket and body
 angle_sensor_offset = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.double)
+angle_sensor_offset.flags.writeable = False
+
 excavator_pos = np.zeros(3, dtype=np.double)  # latitude, longitude, heading
 est_pipe_depth = TargetDepth(target_pos=np.array([]), target_depth=np.array([]))
 
@@ -66,12 +72,11 @@ def can_com_ic_controller():
 
 
 def can_com_cd_controller():
-    global cd_query, pipe_coord, pipe_depth, est_pipe_depth, receive_state, done_state, pipe_boundary_coord
+    global cd_query, pipe_depth, est_pipe_depth, receive_state, done_state, pipe_boundary_coord, pipe_coords_tm
     for can_msg in can_channel_cd:
         safety_control_msg.get_cd_state(packet=can_msg)
         safety_control_msg.get_equip_pos(packet=can_msg)
         safety_control_msg.get_under_utils_query(packet=can_msg)
-
         cd_query = safety_control_msg.read_variable('cd_query')
 
         if cd_query == 'ready_to_receive':
@@ -87,10 +92,15 @@ def can_com_cd_controller():
 
         elif cd_query == 'done':
             if done_state:
-                pipe_coord = safety_control_msg.read_variable('under_utils_coord_data')  # pipe pos of latitude, longitude
-                pipe_boundary_coord = get_target_boundary(pipe_coord, radius=0.1, step=10)
+                pipe_coords = safety_control_msg.read_variable('under_utils_coord_data')  # pipe pos of latitude, longitude
+                pipe_coords_tm = np.zeros((pipe_coords.shape[0], 2), dtype=np.double)
+
+                for i, pipe_coord in enumerate(pipe_coords):  # convert TM coordinate of pipe coordinate
+                    pipe_coords_tm[i, 0], pipe_coords_tm[i, 1] = gps_unit_change(latitude=pipe_coord[0], longitude=pipe_coord[1])
+
+                pipe_boundary_coord = get_target_boundary(pipe_coords_tm, radius=0.1, step=10)
                 pipe_depth = safety_control_msg.read_variable('under_utils_depth_data')
-                est_pipe_depth = TargetDepth(target_pos=pipe_coord, target_depth=pipe_depth)
+                est_pipe_depth = TargetDepth(target_pos=pipe_coords_tm, target_depth=pipe_depth)
                 print(safety_control_msg.read_variable('cd_query'))
                 receive_state = True
                 done_state = False
@@ -152,31 +162,32 @@ while True:
 '''
 
 # create interpolated pipe data
-start_time = time.time()
+start_time: Final[float] = time.time()
 print('algorithm is running...')
 
 while True:
     elapsed_time = time.time() - start_time
 
-    # acquisition excavator position
+    # read value of gps data
     for i, cal_pos in enumerate(safety_control_msg.read_variable('equipment_cal_pos_data')):
         gps_coord[i] = cal_pos
 
     # convert TM coordinate
-    gps_coord[1], gps_coord[0] = gps_unit_change(gps_coord[1], gps_coord[0])
-    gps_coord[3], gps_coord[2] = gps_unit_change(gps_coord[3], gps_coord[2])
+    gps_coord[0], gps_coord[1] = gps_unit_change(latitude=gps_coord[0], longitude=gps_coord[1])  # TM coordinate of x pos, y pos
+    gps_coord[2], gps_coord[3] = gps_unit_change(latitude=gps_coord[2], longitude=gps_coord[3])
 
     excavator_pos[0], excavator_pos[1] = calculation_midpoint(gps_coord[0:2], gps_coord[2:4])
-    excavator_pos[2] = calculation_heading(*gps_coord)
+    excavator_pos[2] = calculation_heading(gps_x_1=gps_coord[1], gps_x_2=gps_coord[3],
+                                           gps_y_1=gps_coord[0], gps_y_2=gps_coord[2])
 
-    # acquisition execution offset and execution low pass filter of angle sensor
+    # read value and execution offset and execution low pass filter of angle sensor
     for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor, body_sensor]):
         excavator_angle[i] = np.subtract(angle_sensor_name.read_sensor_value('y_axis'), angle_sensor_offset[i])
         pred_angle[i] = np.add(np.multiply(0.5, pred_angle[i]), np.multiply(0.5, excavator_angle[i]))
     
     #print(excavator_angle)
 
-    # acquisition of joystick position
+    # read value of joystick position
     for i, var_name in enumerate(['left_x_position', 'left_y_position', 'right_x_position', 'right_y_position']):
         joystick_pos[i] = joystick_msg.read_joystick_value(var_name)
 
@@ -193,7 +204,10 @@ while True:
                                                              y_distance=bucket_local_pos[0], heading=excavator_pos[2])
 
     # recognition to safety status of bucket position
-    bucket_safety_status = get_safety_status(end_point=bucket_global_pos, target=pipe_coord)
+    if pipe_coords_tm.shape[0] > 0:
+        bucket_safety_status = get_safety_status(end_point=bucket_global_pos, target=pipe_coords_tm)
+    else:
+        bucket_safety_status = 0
 
     # get target pipe depth
     if safety_control_msg.read_variable('work_limit') == 'de-active':
@@ -206,10 +220,10 @@ while True:
         control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2], time_offset=0.7,
                                                                threshold_signal=target_pipe_depth)
 
-        t0_2 = time.time()
+        t0_1 = time.time()
 
     if control_state == 1:
-        el_time = np.subtract(time.time(), t0_2)
+        el_time = np.subtract(time.time(), t0_1)
 
         if np.greater_equal(bucket_local_pos[2], np.multiply(target_pipe_depth, 1.5)) and np.greater(el_time, 2.0):
             control_state = 0
@@ -224,18 +238,18 @@ while True:
         safety_state = 0
 
     # create message of safety controller
+    '''
     msg_set_ic.append(safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
                                                              excavator_state=excavator_work_state))
-
+    '''
     msg_set_ic.append(safety_control_msg.create_equip_origin_pos_msg(latitude=excavator_pos[0], longitude=excavator_pos[1]))
     msg_set_ic.append(safety_control_msg.create_equip_heading_msg(heading=excavator_pos[2]))
     msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=np.abs(pred_angle[0]),
                                                                arm_angle=np.abs(np.subtract(pred_angle[0], pred_angle[1])),
                                                                bucket_angle=np.abs(np.subtract(pred_angle[1], pred_angle[2]))))
-    '''
+
     for message in msg_set_ic:
         can_channel_ic.send(message)
-    '''
-    
+
     msg_set_ic = []
     time.sleep(0.1)

@@ -1,14 +1,15 @@
 import can, cantools, time
 import numpy as np
+from typing import Final
 
 np.set_printoptions(suppress=True)
 
 
 class SafetyControlMsgParser:
     def __init__(self):
-        self.__ic_state_id = 0x18FF1010
-        self.__cd_state_id = 0x18FF1011
-        self.__sc_state_id = 0x18FF1012
+        self.__ic_state_id: Final[int] = 0x18FF1010
+        self.__cd_state_id: Final[int] = 0x18FF1011
+        self.__sc_state_id: Final[int] = 0x18FF1012
         self.__under_utils_query_cd_id = 0x18FF3010  # CD -> SC
         self.__under_utils_query_sc_id = 0x18FF3011  # SC -> CD
         self.__equipment_coord_frame_left_id = 0x18FF5010  # CD -> IC/SC
@@ -31,7 +32,7 @@ class SafetyControlMsgParser:
         self.__bucket_position_data: [int] = [0] * 3  # x_pos, y_pos, z_pos
         self.__compensation_angle_data = np.zeros(3, dtype=np.double)
         self.__class__.get_under_utils_data.called = False
-        self.__t0: float = time.time()
+        self.__t0: Final[float] = time.time()
 
     def __time_elapsed(self) -> float:
         return time.time() - self.__t0
@@ -130,7 +131,7 @@ class SafetyControlMsgParser:
         self.__equipment_cal_pos[2] = 36 + (self.__equipment_raw_pos[2] * (10 ** -8))
         self.__equipment_cal_pos[3] = 126 + (self.__equipment_raw_pos[3] * (10 ** -8))
 
-    def create_sc_state_msg(self, sc_state: int = 0, safety_state: int = 0, excavator_state: int = 0) -> can.Message():
+    def create_sc_state_msg(self, sc_state: int = 0, safety_state: int = 0, excavator_state: int = 0) -> can.Message:
         payload = [sc_state, safety_state, excavator_state]
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__sc_state_id, data=payload,
                                is_extended_id=True)
@@ -138,7 +139,7 @@ class SafetyControlMsgParser:
         return send_msg
 
     def create_comp_angle_msg(self, boom_angle: float = 0.0, arm_angle: float = 0.0, bucket_angle: float = 0.0) \
-            -> can.Message():
+            -> can.Message:
         self.__compensation_angle_data[0] = boom_angle
         self.__compensation_angle_data[1] = arm_angle
         self.__compensation_angle_data[2] = bucket_angle
@@ -153,7 +154,7 @@ class SafetyControlMsgParser:
 
         return send_msg
 
-    def create_equip_origin_pos_msg(self, latitude: float = 0.0, longitude: float = 0.0) -> can.Message():
+    def create_equip_origin_pos_msg(self, latitude: float = 0.0, longitude: float = 0.0) -> can.Message:
         self.__equipment_origin_pos[0] = latitude * (10**-8)
         self.__equipment_origin_pos[1] = longitude * (10**-8)
         payload = []
@@ -166,14 +167,14 @@ class SafetyControlMsgParser:
 
         return send_msg
 
-    def create_equip_heading_msg(self, heading: float = 0.0) -> can.Message():
+    def create_equip_heading_msg(self, heading: float = 0.0) -> can.Message:
         payload = list(int(heading * 10).to_bytes(2, byteorder='little'))
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__equipment_origin_heading_id,
                                data=payload, is_extended_id=True)
 
         return send_msg
 
-    def create_under_utils_query_msg(self, request_msg: int = 0) -> can.Message():
+    def create_under_utils_query_msg(self, request_msg: int = 0) -> can.Message:
 
         pay_load = [request_msg]
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__under_utils_query_sc_id,
@@ -181,12 +182,12 @@ class SafetyControlMsgParser:
 
         return send_msg
 
-    def create_ic_state_msg(self, ic_state: int = 0) -> can.Message():
+    def create_ic_state_msg(self, ic_state: int = 0) -> can.Message:
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__sc_state_id, data=[ic_state],\
                                is_extended_id=True)
         return send_msg
 
-    def read_variable(self, parameter_name=''):
+    def read_variable(self, parameter_name: str = ''):
         if parameter_name == 'ic_state':
             return self.__ic_state
 
@@ -260,7 +261,6 @@ class MotorCanMsgParser:
             self.__motor_msg_set.append(self.__motor_can_db.get_message_by_name(msg_set_name))
 
     def create_motor_can_msg(self, motor_index: int = 0, motor_state: int = 0) -> can.Message:
-
         can_msg = can.Message(arbitration_id=self.__motor_msg_set[motor_index].frame_id,
                               data=self.__motor_msg_set[motor_index].encode({'motor_' + str(motor_index): motor_state}),
                               is_extended_id=True)
@@ -268,8 +268,8 @@ class MotorCanMsgParser:
 
 
 class InclinometerSensor:
-    def __init__(self, arbitration_id):
-        self.__arbitration_id = arbitration_id
+    def __init__(self, arbitration_id: int = 0):
+        self.__arbitration_id: Final[int] = arbitration_id
         self.__x_axis: float = 0
         self.__y_axis: float = 0
         self.__z_axis: float = 0
@@ -285,7 +285,7 @@ class InclinometerSensor:
                 self.__z_axis = float(int(msg_hex[8:12], base=16)) * 0.01
                 self.__temp = -273 + (int(msg_hex[12:16], base=16) / 18.9)
 
-    def read_sensor_value(self, parameter_name='') -> float:
+    def read_sensor_value(self, parameter_name: str = '') -> float:
         if parameter_name == 'x_axis':
             return self.__x_axis
 

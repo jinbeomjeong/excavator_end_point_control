@@ -1,6 +1,6 @@
 import math
 import numpy as np
-
+from typing import Tuple
 
 m_arScaleFactor = 1
 m_arLonCenter = 2.21661859489632
@@ -24,9 +24,9 @@ m_dDstMl0 = m_arMajor * (m_dDstE0 * m_arLatCenter - m_dDstE1 * math.sin(2.0 * m_
 m_dDstInd = 0.0
 
 
-def gps_unit_change(E_d, N_d):
-    lon = np.deg2rad(E_d)
-    lat = np.deg2rad(N_d)
+def gps_unit_change(latitude: float, longitude: float) -> Tuple[float, float]:
+    lon = np.deg2rad(longitude)
+    lat = np.deg2rad(latitude)
 
     delta_lon = lon - m_arLonCenter
     sin_phi = math.sin(lat)
@@ -47,7 +47,7 @@ def gps_unit_change(E_d, N_d):
     return TM_x, TM_y
 
 
-def calculation_heading(gps_x_1, gps_x_2, gps_y_1, gps_y_2):  #GPS 2개 안테나를 이용한 Heading(yaw) 각도 산출
+def calculation_heading(gps_x_1, gps_x_2, gps_y_1, gps_y_2) -> float:  #GPS 2개 안테나를 이용한 Heading(yaw) 각도 산출
     theta = math.atan((gps_y_2-gps_y_1)/(gps_x_2-gps_x_1))
     #Heading 각도 0~360도 수정
 
