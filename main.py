@@ -10,7 +10,7 @@ from utils.warning_target import get_end_pos, get_safety_status, get_target_boun
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
 
-# tcp_handle = TCPClient(address='localhost', port=6340)
+# tcp_handle = TCPClient(address='192.168.137.1', port=6340)
 # tcp_handle.connect_to_server()
 
 can_channel_ic = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
@@ -19,7 +19,7 @@ can_channel_cd = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS2', bitra
 boom_sensor = InclinometerSensor(arbitration_id=0x10FF5383)
 arm_sensor = InclinometerSensor(arbitration_id=0x10FF5382)
 bucket_sensor = InclinometerSensor(arbitration_id=0x10FF5381)
-body_sensor = InclinometerSensor(arbitration_id=0x00)
+body_sensor = InclinometerSensor(arbitration_id=0x10FF5384)
 
 joystick_msg = JoystickMsgParser()
 safety_control_msg = SafetyControlMsgParser()
@@ -46,7 +46,8 @@ bucket_global_pos = np.zeros(2, dtype=np.double)  # x-axis, y-axis
 joystick_pos = np.zeros(4, dtype=np.uint8)  # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 excavator_angle = np.zeros(4, dtype=np.double)  # boom, arm and bucket angle
 pred_angle = np.zeros(4, dtype=np.double)  # predict of boom, arm and bucket angle
-angle_sensor_offset = np.array([276.3, 270.0, 270, 0], dtype=np.double)  # offset angle of boom, arm, bucket and body
+#angle_sensor_offset = np.array([276.3, 270.0, 270, 0], dtype=np.double)  # offset angle of boom, arm, bucket and body
+angle_sensor_offset = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.double)
 excavator_pos = np.zeros(3, dtype=np.double)  # latitude, longitude, heading
 est_pipe_depth = TargetDepth(target_pos=np.array([]), target_depth=np.array([]))
 
@@ -161,6 +162,10 @@ while True:
     for i, cal_pos in enumerate(safety_control_msg.read_variable('equipment_cal_pos_data')):
         gps_coord[i] = cal_pos
 
+    # convert TM coordinate
+    gps_coord[1], gps_coord[0] = gps_unit_change(gps_coord[1], gps_coord[0])
+    gps_coord[3], gps_coord[2] = gps_unit_change(gps_coord[3], gps_coord[2])
+
     excavator_pos[0] = gps_coord[0]
     excavator_pos[1] = gps_coord[1]
     excavator_pos[2] = calculation_heading(*gps_coord)
@@ -169,6 +174,8 @@ while True:
     for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor, body_sensor]):
         excavator_angle[i] = np.subtract(angle_sensor_name.read_sensor_value('y_axis'), angle_sensor_offset[i])
         pred_angle[i] = np.add(np.multiply(0.5, pred_angle[i]), np.multiply(0.5, excavator_angle[i]))
+    
+    #print(excavator_angle)
 
     # acquisition of joystick position
     for i, var_name in enumerate(['left_x_position', 'left_y_position', 'right_x_position', 'right_y_position']):
@@ -226,9 +233,10 @@ while True:
     msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=np.abs(pred_angle[0]),
                                                                arm_angle=np.abs(np.subtract(pred_angle[0], pred_angle[1])),
                                                                bucket_angle=np.abs(np.subtract(pred_angle[1], pred_angle[2]))))
-
+    '''
     for message in msg_set_ic:
         can_channel_ic.send(message)
-
-    msg_set = []
+    '''
+    
+    msg_set_ic = []
     time.sleep(0.1)

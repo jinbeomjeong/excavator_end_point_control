@@ -9,7 +9,7 @@ class TargetDepth:
         self.target_depth = target_depth
         self.depth = np.zeros(2, dtype=np.double)
 
-    def get_target_depth(self, current_pos: np.ndarray): # current_pos: np.ndarray of len 2
+    def get_target_depth(self, current_pos: np.ndarray):  # current_pos: np.ndarray of len 2
         for i, pos in enumerate(current_pos):
             self.depth[i] = np.interp(pos, self.target_pos[:, i], self.target_depth)
 
