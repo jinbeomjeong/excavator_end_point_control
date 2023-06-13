@@ -109,3 +109,10 @@ def find_center(coord1, coord2):
     center = to_geodetic(center_x, center_y, center_z)
 
     return center
+
+
+def calculation_midpoint(coord1: np.ndarray, coord2: np.ndarray):  # coord: latitude, longitude
+    midpoint_x = (coord1[1] + coord2[1]) / 2
+    midpoint_y = (coord1[0] + coord2[0]) / 2
+
+    return midpoint_x, midpoint_y

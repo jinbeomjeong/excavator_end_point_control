@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from utils.accessory_lib import system_info
 from utils.predcit_api import predict_control_linear
-from utils.calculate_gps_data import calculation_heading, find_center, gps_unit_change
+from utils.calculate_gps_data import calculation_heading, gps_unit_change, calculation_midpoint
 from utils.end_point_kinematics import end_point_kinematics, link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
 from utils.warning_target import get_end_pos, get_safety_status, get_target_boundary, TargetDepth
@@ -166,8 +166,7 @@ while True:
     gps_coord[1], gps_coord[0] = gps_unit_change(gps_coord[1], gps_coord[0])
     gps_coord[3], gps_coord[2] = gps_unit_change(gps_coord[3], gps_coord[2])
 
-    excavator_pos[0] = gps_coord[0]
-    excavator_pos[1] = gps_coord[1]
+    excavator_pos[0], excavator_pos[1] = calculation_midpoint(gps_coord[0:2], gps_coord[2:4])
     excavator_pos[2] = calculation_heading(*gps_coord)
 
     # acquisition execution offset and execution low pass filter of angle sensor
