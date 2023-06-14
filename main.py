@@ -1,18 +1,20 @@
-import time, threading, can
+import time, threading, can, argparse
 import numpy as np
 import pandas as pd
 from utils.accessory_lib import system_info
 from utils.predcit_api import predict_control_linear
-from utils.calculate_gps_data import calculation_heading, gps_unit_change, calculation_midpoint
+from utils.calculate_gps_data import calculation_heading, gps_unit_change
 from utils.end_point_kinematics import end_point_kinematics, link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
 from utils.warning_target import get_end_pos, get_safety_status, get_target_boundary, TargetDepth
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
-from typing import Final
+from typing import Final, List
 
-# tcp_handle = TCPClient(address='192.168.137.1', port=6340)
-# tcp_handle.connect_to_server()
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--ip", type=str, default='')
+args = parser.parse_args()
 
 can_channel_ic = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
 can_channel_cd = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS2', bitrate=250000)
@@ -38,9 +40,10 @@ cd_query = 'none'
 receive_state = True
 done_state = True
 pipe_boundary_coord: np.array([])
-pipe_coords_tm: np.array([])
+pipe_coords_tm = np.array([])
 pipe_depth = np.zeros(0, dtype=np.double)
-gps_coord = np.zeros(4, dtype=np.double)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
+gps_coords = np.zeros(4, dtype=np.double)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
+gps_coords_tm = np.zeros(4, dtype=np.double)  # tm coordinates for gps coordinates
 bucket_local_pos = np.zeros(3, dtype=np.double)  # x-axis, y-axis, z-axis
 bucket_global_pos = np.zeros(2, dtype=np.double)  # x-axis, y-axis
 
@@ -59,6 +62,10 @@ est_pipe_depth = TargetDepth(target_pos=np.array([]), target_depth=np.array([]))
 
 logging_data: pd.DataFrame = pd.DataFrame()
 elapsed_time: float = 0.0
+
+# excavator_tm_latitude, excavator_tm_longitude, heading
+# bucket_goal_x_pos, bucket_goal_y_pos, bucket_z_pos, target_depth
+tcp_msg = np.zeros(7, dtype=np.double)
 
 
 def can_com_ic_controller():
@@ -106,6 +113,23 @@ def can_com_cd_controller():
                 done_state = False
 
 
+class TcpCom:
+    def __init__(self, ip: str = ''):
+        if len(args.ip) > 0:
+            self.tcp_handle = TCPClient(address=ip, port=6340)
+            self.tcp_handle.connect_to_server()
+
+    def send_msg(self, msg: List):
+        for data in msg:
+            self.tcp_handle.send_msg(np.array2string(data.flatten('C'), precision=1, separator=',').lstrip('[').rstrip(']'))
+
+
+tcp_com = TcpCom(ip=args.ip)
+tcp_task = threading.Timer(interval=0.1, function=tcp_com.send_msg, args=(tcp_msg,))
+tcp_task.daemon = True
+tcp_task.start()
+
+
 class Logging:
     def __init__(self, file_name='Logging_Data'):
         self.logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle', 'arm_angle', 'bucket_angle', 'body_angle',
@@ -115,7 +139,8 @@ class Logging:
                                                     'excavator_heading', 'bucket_goal_x_pos', 'bucket_goal_y_pos',
                                                     'bucket_depth_pos', 'excavator_work_state', 'control_state',
                                                     'target_pipe_depth', 'gps_1_latitude', 'gps_1_longitude',
-                                                    'gps_2_latitude', 'gps_2_longitude'])
+                                                    'gps_2_latitude', 'gps_2_longitude', 'gps_1_tm_latitude',
+                                                    'gps_1_tm_longitude', 'gps_2_tm_latitude', 'gps_2_tm_longitude'])
 
         self.start_time_str = time.strftime('%Y%m%d-%H%M%S', time.localtime(time.time()))
         self.logging_file_name = file_name + '_' + self.start_time_str
@@ -131,8 +156,9 @@ class Logging:
                                      '11': excavator_pos[1], '12': excavator_pos[2], '13': bucket_global_pos[0],
                                      '14': bucket_global_pos[1], '15': bucket_local_pos[2], '16': excavator_work_state,
                                      '17': control_state, '18': target_pipe_depth,
-                                     '19': gps_coord[0], '20': gps_coord[1], '21': gps_coord[2], '22': gps_coord[3]},
-                                    index=[0])
+                                     '19': gps_coords[0], '20': gps_coords[1], '21': gps_coords[2], '22': gps_coords[3],
+                                     '23': gps_coords_tm[0], '24': gps_coords_tm[1], '25': gps_coords_tm[2],
+                                     '26': gps_coords_tm[3]}, index=[0])
 
         logging_data.to_csv(self.logging_file_path, mode='a', header=False)
         logging_thread = threading.Timer(period, self.start_logging, (period,))
@@ -170,15 +196,14 @@ while True:
 
     # read value of gps data
     for i, cal_pos in enumerate(safety_control_msg.read_variable('equipment_cal_pos_data')):
-        gps_coord[i] = cal_pos
+        gps_coords[i] = cal_pos
 
     # convert TM coordinate
-    gps_coord[0], gps_coord[1] = gps_unit_change(latitude=gps_coord[0], longitude=gps_coord[1])  # TM coordinate of x pos, y pos
-    gps_coord[2], gps_coord[3] = gps_unit_change(latitude=gps_coord[2], longitude=gps_coord[3])
+    gps_coords_tm[0], gps_coords_tm[1] = gps_unit_change(latitude=gps_coords[0], longitude=gps_coords[1])  # TM coordinate of x pos, y pos
+    gps_coords_tm[2], gps_coords_tm[3] = gps_unit_change(latitude=gps_coords[2], longitude=gps_coords[3])
 
-    excavator_pos[0], excavator_pos[1] = calculation_midpoint(gps_coord[0:2], gps_coord[2:4])
-    excavator_pos[2] = calculation_heading(gps_x_1=gps_coord[1], gps_x_2=gps_coord[3],
-                                           gps_y_1=gps_coord[0], gps_y_2=gps_coord[2])
+    excavator_pos[2] = calculation_heading(gps_x_1=gps_coords_tm[1], gps_x_2=gps_coords_tm[3],
+                                           gps_y_1=gps_coords_tm[0], gps_y_2=gps_coords_tm[2])
 
     # read value and execution offset and execution low pass filter of angle sensor
     for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor, body_sensor]):
@@ -195,8 +220,8 @@ while True:
     excavator_work_state = work_status(boom_pitch=pred_angle[0], arm_pitch=pred_angle[1], bucket_pitch=pred_angle[2],
                                        left_joystick_x_pos=joystick_pos[0], left_joystick_y_pos=joystick_pos[1],
                                        right_joystick_x_pos=joystick_pos[2], right_joystick_y_pos=joystick_pos[3],
-                                       gps_ch1_latitude=gps_coord[0], gps_ch1_longitude=gps_coord[1],
-                                       gps_ch2_latitude=gps_coord[2], gps_ch2_longitude=gps_coord[3])
+                                       gps_ch1_latitude=gps_coords_tm[0], gps_ch1_longitude=gps_coords_tm[1],
+                                       gps_ch2_latitude=gps_coords_tm[2], gps_ch2_longitude=gps_coords_tm[3])
 
     # estimation of bucket position
     bucket_local_pos[0], bucket_local_pos[2] = end_point_kinematics(pred_angle[0], pred_angle[1], pred_angle[2])
@@ -252,4 +277,9 @@ while True:
         can_channel_ic.send(message)
 
     msg_set_ic = []
+
+    for i, data in enumerate([excavator_pos[0], excavator_pos[1], excavator_pos[2],
+                              bucket_global_pos[0], bucket_global_pos[1], bucket_local_pos[2], target_pipe_depth]):
+        tcp_msg[i] = data
+
     time.sleep(0.1)
