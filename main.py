@@ -14,6 +14,7 @@ from typing import Final, List
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--ip", type=str, default='')
+parser.add_argument("--log_name", type=str, default='logging_data')
 args = parser.parse_args()
 
 can_channel_ic = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
@@ -65,7 +66,7 @@ elapsed_time: float = 0.0
 
 # excavator_tm_latitude, excavator_tm_longitude, heading
 # bucket_goal_x_pos, bucket_goal_y_pos, bucket_z_pos, target_depth
-tcp_msg = np.zeros(7, dtype=np.double)
+tcp_msg = np.zeros(9, dtype=np.double)
 
 
 def can_com_ic_controller():
@@ -119,19 +120,15 @@ class TcpCom:
             self.tcp_handle = TCPClient(address=ip, port=6340)
             self.tcp_handle.connect_to_server()
 
-    def send_msg(self, msg: List):
-        for data in msg:
-            self.tcp_handle.send_msg(np.array2string(data.flatten('C'), precision=1, separator=',').lstrip('[').rstrip(']'))
-
-
-tcp_com = TcpCom(ip=args.ip)
-tcp_task = threading.Timer(interval=0.1, function=tcp_com.send_msg, args=(tcp_msg,))
-tcp_task.daemon = True
-tcp_task.start()
+    def send_msg(self):
+        self.tcp_handle.send_msg(np.array2string(tcp_msg.flatten('C'), precision=10, separator=',').lstrip('[').rstrip(']'))
+        tcp_thread = threading.Timer(interval=0.1, function=self.send_msg, args=())
+        tcp_thread.daemon = True
+        tcp_thread.start()
 
 
 class Logging:
-    def __init__(self, file_name='Logging_Data'):
+    def __init__(self, file_name: str = ''):
         self.logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle', 'arm_angle', 'bucket_angle', 'body_angle',
                                                     'joystick_left_x_pos', 'joystick_left_y_pos',
                                                     'joystick_right_x_pos', 'joystick_right_y_pos',
@@ -174,8 +171,11 @@ can_com_cd_task = threading.Thread(target=can_com_cd_controller)
 can_com_cd_task.daemon = True
 can_com_cd_task.start()
 
-logging_task = Logging(file_name='Logging_Data')
+logging_task = Logging(file_name=args.log_name)
 logging_task.start_logging(period=0.1)
+
+tcp_task = TcpCom(ip=args.ip)
+tcp_task.send_msg()
 
 # set stand-by state change of safety controller
 system_info()
@@ -279,7 +279,8 @@ while True:
     msg_set_ic = []
 
     for i, data in enumerate([excavator_pos[0], excavator_pos[1], excavator_pos[2],
-                              bucket_global_pos[0], bucket_global_pos[1], bucket_local_pos[2], target_pipe_depth]):
+                              bucket_global_pos[0], bucket_global_pos[1], bucket_local_pos[2], target_pipe_depth,
+                              safety_state, excavator_work_state]):
         tcp_msg[i] = data
 
     time.sleep(0.1)
