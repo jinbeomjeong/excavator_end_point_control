@@ -171,11 +171,13 @@ can_com_cd_task = threading.Thread(target=can_com_cd_controller)
 can_com_cd_task.daemon = True
 can_com_cd_task.start()
 
-logging_task = Logging(file_name=args.log_name)
-logging_task.start_logging(period=0.1)
+if len(args.log_name) > 0:
+    logging_task = Logging(file_name=args.log_name)
+    logging_task.start_logging(period=0.1)
 
-tcp_task = TcpCom(ip=args.ip)
-tcp_task.send_msg()
+if len(args.ip) > 0:
+    tcp_task = TcpCom(ip=args.ip)
+    tcp_task.send_msg()
 
 # set stand-by state change of safety controller
 system_info()
