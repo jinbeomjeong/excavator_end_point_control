@@ -8,31 +8,21 @@ m_Bucket_Length = 1260
 m_Height = 1700
 
 
-def end_point_kinematics(boom_angle, arm_angle, bucket_angle):
-    x_pos = (m_Boom_Length * np.cos(np.deg2rad(boom_angle))) + \
-            (m_Arm_Length * np.cos(np.deg2rad(boom_angle) + np.deg2rad(boom_angle-arm_angle))) + \
-            (m_Bucket_Length * np.cos(np.deg2rad(boom_angle) + np.deg2rad(boom_angle-arm_angle) +
-                                      np.deg2rad(arm_angle-bucket_angle)))
+def end_point_kinematics(boom_angle: float, arm_angle: float, bucket_angle: float):
+    arm_relative_angle = np.multiply(np.subtract(boom_angle, arm_angle), -1)
+    bucket_relative_angle = np.multiply(np.subtract(arm_angle, bucket_angle), -1)
 
-    z_pos = (m_Boom_Length * np.sin(np.deg2rad(boom_angle))) + \
-            (m_Arm_Length * np.sin(np.deg2rad(boom_angle) + np.deg2rad(boom_angle-arm_angle))) + \
-            (m_Bucket_Length * np.sin(np.deg2rad(boom_angle) + np.deg2rad(boom_angle-arm_angle) +
-                                      np.deg2rad(arm_angle-bucket_angle))) + m_Height
+    x_pos_boom = m_Boom_Length * np.cos(np.deg2rad(boom_angle))
+    x_pos_arm = m_Arm_Length * np.cos(np.deg2rad(arm_relative_angle))
+    x_pos_bucket = m_Bucket_Length * np.cos(np.deg2rad(bucket_relative_angle))
+    x_pos = x_pos_boom + x_pos_arm + x_pos_bucket
 
-    return x_pos, z_pos
+    z_pos_boom = m_Boom_Length * np.sin(np.deg2rad(boom_angle))
+    z_pos_arm = m_Arm_Length * np.sin(np.deg2rad(arm_relative_angle))
+    z_pos_bucket = m_Bucket_Length * np.sin(np.deg2rad(bucket_relative_angle))
+    z_pos = z_pos_boom + z_pos_arm + z_pos_bucket + m_Height
 
-
-def end_point_kinematics_test(boom_angle, arm_angle, bucket_angle):
-    x_pos = (m_Boom_Length * np.cos(np.deg2rad(boom_angle))) + \
-            (m_Arm_Length * np.cos(np.deg2rad(arm_angle))) + \
-            (m_Bucket_Length * np.cos(np.deg2rad(bucket_angle)))
-
-    z_pos = (m_Boom_Length * np.sin(np.deg2rad(boom_angle))) + \
-            (m_Arm_Length * np.sin(np.deg2rad(arm_angle))) + \
-            (m_Bucket_Length * np.sin(np.deg2rad(bucket_angle))) \
-            + m_Height
-
-    return x_pos, z_pos
+    return x_pos, z_pos, arm_relative_angle, bucket_relative_angle
 
 
 theta4_1: float = 0
