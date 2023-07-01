@@ -6,7 +6,7 @@ from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
 from utils.end_point_kinematics import end_point_kinematics, link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
-from utils.warning_target import get_end_pos, get_safety_status, get_target_boundary, TargetDepth
+from utils.warning_target import get_global_bucket_pos, get_safety_status, get_target_boundary, TargetDepth
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
 from typing import Final, List
@@ -46,7 +46,7 @@ pipe_depth = np.zeros(0, dtype=np.double)
 gps_coords = np.zeros(4, dtype=np.double)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
 gps_coords_tm = np.zeros(4, dtype=np.double)  # tm coordinates for gps coordinates
 bucket_local_pos = np.zeros(3, dtype=np.double)  # x-axis, y-axis, z-axis
-bucket_global_pos = np.zeros(2, dtype=np.double)  # x-axis, y-axis
+bucket_global_pos = np.zeros(2, dtype=np.double)  # latitude, longitude
 
 # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
@@ -54,8 +54,7 @@ joystick_pos = np.zeros(4, dtype=np.uint8)
 
 excavator_angle = np.zeros(4, dtype=np.double)  # boom, arm and bucket angle
 pred_angle = np.zeros(4, dtype=np.double)  # predict of boom, arm and bucket angle
-# angle_sensor_offset = np.array([276.3, 270.0, 270, 0], dtype=np.double)  # offset angle of boom, arm, bucket and body
-angle_sensor_offset = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.double)
+angle_sensor_offset = np.array([268.5, 265.6, 270, 0], dtype=np.double)  # offset angle of boom, arm, bucket and body
 angle_sensor_offset.flags.writeable = False
 
 excavator_pos = np.zeros(3, dtype=np.double)  # latitude, longitude, heading
@@ -66,7 +65,7 @@ elapsed_time: float = 0.0
 
 # excavator_tm_latitude, excavator_tm_longitude, heading
 # bucket_goal_x_pos, bucket_goal_y_pos, bucket_z_pos, target_depth
-tcp_msg = np.zeros(9, dtype=np.double)
+tcp_msg = np.zeros(13, dtype=np.double)
 
 
 def can_com_ic_controller():
@@ -208,6 +207,7 @@ while True:
     excavator_pos[2] = calculation_heading(gps_x_1=gps_coords_tm[1], gps_x_2=gps_coords_tm[3],
                                            gps_y_1=gps_coords_tm[0], gps_y_2=gps_coords_tm[2])
 
+    # print(excavator_pos)
     # read value and execution offset and execution low pass filter of angle sensor
     for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor, body_sensor]):
         excavator_angle[i] = np.subtract(angle_sensor_name.read_sensor_value('y_axis'), angle_sensor_offset[i])
@@ -228,9 +228,8 @@ while True:
     bucket_local_pos[0], bucket_local_pos[2], arm_relative_angle, bucket_relative_angle = \
         end_point_kinematics(pred_angle[0], pred_angle[1], pred_angle[2])
 
-    bucket_global_pos[0], bucket_global_pos[1] = get_end_pos(origin=[excavator_pos[1], excavator_pos[0]],
-                                                             y_distance=bucket_local_pos[0], heading=excavator_pos[2])
-
+    bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
+                                                                       y_distance=bucket_local_pos[0], heading=excavator_pos[2])
     # recognition to safety status of bucket position
     if pipe_coords_tm.shape[0] > 0:
         bucket_safety_status = get_safety_status(end_point=bucket_global_pos, target=pipe_coords_tm)
@@ -282,8 +281,11 @@ while True:
     msg_set_ic = []
 
     for i, data in enumerate([excavator_pos[0], excavator_pos[1], excavator_pos[2],
-                              bucket_global_pos[0], bucket_global_pos[1], bucket_local_pos[2], target_pipe_depth,
+                              bucket_global_pos[0], bucket_global_pos[1], target_pipe_depth, bucket_local_pos[0],
+                              bucket_local_pos[2], pred_angle[0], pred_angle[1], pred_angle[2],
                               safety_state, excavator_work_state]):
         tcp_msg[i] = data
 
+    print(pred_angle)
+    print(bucket_local_pos)
     time.sleep(0.1)

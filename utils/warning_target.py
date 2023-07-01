@@ -98,12 +98,13 @@ def __get_distance_opt(origin: np.ndarray, target: np.ndarray, threshold: float)
     return dis_arr, in_work
 
 
-def get_end_pos(origin: List, y_distance, heading) -> Tuple[float, float]:
+def get_global_bucket_pos(origin: List, y_distance, heading: float) -> Tuple[float, float]:
     heading = (heading+360) % 360
-    x_pos = np.sin(np.deg2rad(heading)) * y_distance + origin[0]
-    y_pos = np.cos(np.deg2rad(heading)) * y_distance + origin[1]
+    y_distance /= 1000
+    latitude = np.cos(np.deg2rad(heading)) * y_distance + origin[0]
+    longitude = np.sin(np.deg2rad(heading)) * y_distance + origin[1]
 
-    return x_pos, y_pos
+    return latitude, longitude
 
 
 def get_safety_status(end_point: np.ndarray, target: np.ndarray) -> int:
