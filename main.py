@@ -78,7 +78,7 @@ def can_com_ic_controller():
 
 
 def can_com_cd_controller():
-    global cd_query, pipe_depth, est_pipe_depth, receive_state, done_state, pipe_boundary_coord, pipe_coords_tm
+    global cd_query, pipe_depth, receive_state, done_state, pipe_boundary_coord, pipe_coords_tm
     for can_msg in can_channel_cd:
         safety_control_msg.get_cd_state(packet=can_msg)
         safety_control_msg.get_equip_pos(packet=can_msg)
@@ -103,10 +103,9 @@ def can_com_cd_controller():
                 pipe_coords_tm = np.zeros((pipe_coords.shape[0], 2), dtype=np.double)
 
                 for i, pipe_coord in enumerate(pipe_coords):  # convert TM coordinate of pipe coordinate
-                    pipe_coords_tm[i, 0], pipe_coords_tm[i, 1] = gps_unit_change(latitude=pipe_coord[0], longitude=pipe_coord[1])
+                    pipe_coords_tm[i, 1], pipe_coords_tm[i, 0] = gps_unit_change(latitude=pipe_coord[0], longitude=pipe_coord[1])
 
                 # pipe_boundary_coord = get_target_boundary(pipe_coords_tm, radius=0.1, step=10)
-                # est_pipe_depth = TargetDepth(target_pos=pipe_coords_tm, target_depth=pipe_depth[0])
                 print(safety_control_msg.read_variable('cd_query'))
                 receive_state = True
                 done_state = False
