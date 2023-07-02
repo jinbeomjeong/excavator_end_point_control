@@ -6,7 +6,7 @@ from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
 from utils.end_point_kinematics import end_point_kinematics, link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
-from utils.warning_target import get_global_bucket_pos, get_safety_status, get_target_boundary, TargetDepth
+from utils.warning_target import get_global_bucket_pos, get_safety_status, get_target_boundary
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
 from typing import Final, List
@@ -58,7 +58,6 @@ angle_sensor_offset = np.array([268.5, 265.6, 270, 0], dtype=np.double)  # offse
 angle_sensor_offset.flags.writeable = False
 
 excavator_pos = np.zeros(3, dtype=np.double)  # latitude, longitude, heading
-est_pipe_depth = TargetDepth(target_pos=np.array([]), target_depth=np.array([]))
 
 logging_data: pd.DataFrame = pd.DataFrame()
 elapsed_time: float = 0.0
@@ -100,14 +99,14 @@ def can_com_cd_controller():
         elif cd_query == 'done':
             if done_state:
                 pipe_coords = safety_control_msg.read_variable('under_utils_coord_data')  # pipe pos of latitude, longitude
+                pipe_depth = safety_control_msg.read_variable('under_utils_depth_data')  # pipe depth and diameter
                 pipe_coords_tm = np.zeros((pipe_coords.shape[0], 2), dtype=np.double)
 
                 for i, pipe_coord in enumerate(pipe_coords):  # convert TM coordinate of pipe coordinate
                     pipe_coords_tm[i, 0], pipe_coords_tm[i, 1] = gps_unit_change(latitude=pipe_coord[0], longitude=pipe_coord[1])
 
-                pipe_boundary_coord = get_target_boundary(pipe_coords_tm, radius=0.1, step=10)
-                pipe_depth = safety_control_msg.read_variable('under_utils_depth_data')
-                est_pipe_depth = TargetDepth(target_pos=pipe_coords_tm, target_depth=pipe_depth)
+                # pipe_boundary_coord = get_target_boundary(pipe_coords_tm, radius=0.1, step=10)
+                # est_pipe_depth = TargetDepth(target_pos=pipe_coords_tm, target_depth=pipe_depth[0])
                 print(safety_control_msg.read_variable('cd_query'))
                 receive_state = True
                 done_state = False
@@ -200,8 +199,8 @@ while True:
         gps_coords[i] = cal_pos
 
     # convert TM coordinate
-    gps_coords_tm[0], gps_coords_tm[1] = gps_unit_change(latitude=gps_coords[0], longitude=gps_coords[1])  # TM coordinate of x pos, y pos
-    gps_coords_tm[2], gps_coords_tm[3] = gps_unit_change(latitude=gps_coords[2], longitude=gps_coords[3])
+    gps_coords_tm[1], gps_coords_tm[0] = gps_unit_change(latitude=gps_coords[0], longitude=gps_coords[1])  # TM coordinate of x pos, y pos
+    gps_coords_tm[3], gps_coords_tm[2] = gps_unit_change(latitude=gps_coords[2], longitude=gps_coords[3])
 
     excavator_pos[0], excavator_pos[1] = est_gps_center(gps_1_coord=gps_coords_tm[0:2], gps_2_coord=gps_coords_tm[2:4], offset=1.16)
     excavator_pos[2] = calculation_heading(gps_x_1=gps_coords_tm[1], gps_x_2=gps_coords_tm[3],
@@ -237,10 +236,17 @@ while True:
         bucket_safety_status = 0
 
     # get target pipe depth
-    if safety_control_msg.read_variable('work_limit') == 'de-active':
-        target_pipe_depth = 0
+    work_limit_state = safety_control_msg.read_variable('work_limit')
+
+    if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0:
+        est_depth = np.zeros(2, dtype=np.double)
+
+        for i, pos in enumerate(excavator_pos[0:2]):
+            est_depth[i] = np.interp(pos, pipe_coords_tm[:, i], pipe_depth[:, 0])
+
+        target_pipe_depth = np.negative(np.multiply(np.min(est_depth), 1000))
     else:
-        target_pipe_depth = est_pipe_depth.get_target_depth(current_pos=bucket_global_pos)
+        target_pipe_depth = 0
 
     # safety control of bucket position
     if control_state == 0:
@@ -285,7 +291,8 @@ while True:
                               bucket_local_pos[2], pred_angle[0], pred_angle[1], pred_angle[2],
                               safety_state, excavator_work_state]):
         tcp_msg[i] = data
+    # print(pipe_coords_tm)
+    #print(safety_control_msg.read_variable('work_limit'))
+    # print(bucket_global_pos)
 
-    print(pred_angle)
-    print(bucket_local_pos)
     time.sleep(0.1)

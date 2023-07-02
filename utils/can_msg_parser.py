@@ -101,8 +101,8 @@ class SafetyControlMsgParser:
             for coord_id in self.__under_utils_coord_id:
                 if coord_id == arbit_id:
                     self.__under_utils_coord_data[int(hex(arbit_id)[6:8], base=16), 0:2] = \
-                        np.array([36+(int.from_bytes(payload[0:4], byteorder='little')*(10 ** -8)),
-                                  126+(int.from_bytes(payload[4:8], byteorder='little')*(10 ** -8))], dtype=np.double)
+                        np.array([36+(int.from_bytes(payload[4:8], byteorder='little')*(10 ** -8)),
+                                  126+(int.from_bytes(payload[0:4], byteorder='little')*(10 ** -8))], dtype=np.double)
 
             for depth_id in self.__under_utils_depth_id:
                 if depth_id == arbit_id:
