@@ -144,10 +144,11 @@ class SafetyControlMsgParser:
         self.__compensation_angle_data[1] = arm_angle
         self.__compensation_angle_data[2] = bucket_angle
 
-        payload = []
+        payload = bytes(0)
 
         for comp_angle in self.__compensation_angle_data:
-            payload += list(int(comp_angle).to_bytes(2, byteorder='little'))
+            comp_angle = (comp_angle*10)+3600
+            payload += int(comp_angle).to_bytes(2, byteorder='little')
 
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__compensation_angle_id,
                                data=payload, is_extended_id=True)

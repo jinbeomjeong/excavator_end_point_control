@@ -48,23 +48,8 @@ def gps_unit_change(latitude: float, longitude: float) -> Tuple[float, float]:
 
 
 def calculation_heading(gps_x_1, gps_x_2, gps_y_1, gps_y_2) -> float:  #GPS 2개 안테나를 이용한 Heading(yaw) 각도 산출
-    theta = math.atan((gps_y_2-gps_y_1)/(gps_x_2-gps_x_1))
-    #Heading 각도 0~360도 수정
-
-    if gps_x_1 <= gps_x_2 and gps_y_1 <= gps_y_2:
-        theta = theta + 180
-
-    elif gps_x_1 >= gps_x_2 and gps_y_1 <= gps_y_2:
-        theta = theta + 360
-
-    elif gps_x_1 >= gps_x_2 and gps_y_1 >= gps_y_2:
-        theta = theta
-
-    elif gps_x_1 <= gps_x_2 and gps_y_1 >= gps_y_2:
-        theta = theta + 180
-
-    if np.isnan(theta):
-        theta = 0
+    theta = np.arctan2(gps_y_2-gps_y_1, gps_x_2-gps_x_1)
+    theta = np.rad2deg(theta)+180
 
     return theta
 
