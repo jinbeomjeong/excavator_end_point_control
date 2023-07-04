@@ -202,7 +202,10 @@ while True:
     gps_coords_tm[1], gps_coords_tm[0] = gps_unit_change(latitude=gps_coords[0], longitude=gps_coords[1])  # TM coordinate of x pos, y pos
     gps_coords_tm[3], gps_coords_tm[2] = gps_unit_change(latitude=gps_coords[2], longitude=gps_coords[3])
 
+    # estimation excavator center position
     excavator_pos[0], excavator_pos[1] = est_gps_center(gps_1_coord=gps_coords_tm[0:2], gps_2_coord=gps_coords_tm[2:4], offset=1.16)
+
+    # calculation of excavator heading angle
     excavator_pos[2] = calculation_heading(gps_x_1=gps_coords_tm[1], gps_x_2=gps_coords_tm[3],
                                            gps_y_1=gps_coords_tm[0], gps_y_2=gps_coords_tm[2])
 
@@ -216,11 +219,10 @@ while True:
         joystick_pos[i] = joystick_msg.read_joystick_value(var_name)
 
     # recognition of excavator state
-    excavator_work_state = work_status(boom_pitch=pred_angle[0], arm_pitch=pred_angle[1], bucket_pitch=pred_angle[2],
+    excavator_work_state = work_status(boom_angle=pred_angle[0], arm_angle=pred_angle[1], bucket_angle=pred_angle[2],
                                        left_joystick_x_pos=joystick_pos[0], left_joystick_y_pos=joystick_pos[1],
                                        right_joystick_x_pos=joystick_pos[2], right_joystick_y_pos=joystick_pos[3],
-                                       gps_ch1_latitude=gps_coords_tm[0], gps_ch1_longitude=gps_coords_tm[1],
-                                       gps_ch2_latitude=gps_coords_tm[2], gps_ch2_longitude=gps_coords_tm[3])
+                                       excavator_latitude=excavator_pos[0], excavator_longitude=excavator_pos[1])
 
     # estimation of bucket position
     bucket_local_pos[1], bucket_local_pos[2], relative_angle[0], relative_angle[1] = \

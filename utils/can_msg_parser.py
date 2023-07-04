@@ -158,10 +158,10 @@ class SafetyControlMsgParser:
     def create_equip_origin_pos_msg(self, latitude: float = 0.0, longitude: float = 0.0) -> can.Message:
         self.__equipment_origin_pos[0] = latitude * (10**-8)
         self.__equipment_origin_pos[1] = longitude * (10**-8)
-        payload = []
+        payload = bytes(0)
 
         for position in self.__equipment_origin_pos:
-            payload += list(int(position).to_bytes(4, byteorder='little'))
+            payload += int(position).to_bytes(4, byteorder='little')
 
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__equipment_origin_pos_id,
                                data=payload, is_extended_id=True)
@@ -169,7 +169,7 @@ class SafetyControlMsgParser:
         return send_msg
 
     def create_equip_heading_msg(self, heading: float = 0.0) -> can.Message:
-        payload = list(int(heading * 10).to_bytes(2, byteorder='little'))
+        payload = int(heading * 10).to_bytes(2, byteorder='little')
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__equipment_origin_heading_id,
                                data=payload, is_extended_id=True)
 
@@ -184,7 +184,7 @@ class SafetyControlMsgParser:
         return send_msg
 
     def create_ic_state_msg(self, ic_state: int = 0) -> can.Message:
-        send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__sc_state_id, data=[ic_state],\
+        send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__sc_state_id, data=[ic_state],
                                is_extended_id=True)
         return send_msg
 
