@@ -6,7 +6,7 @@ from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
 from utils.end_point_kinematics import end_point_kinematics, link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
-from utils.warning_target import get_global_bucket_pos, get_safety_status, get_target_boundary
+from utils.warning_target import get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
 from typing import Final, List
@@ -40,9 +40,12 @@ excavator_work_state: int = 0
 cd_query = 'none'
 receive_state = True
 done_state = True
-pipe_boundary_coord: np.array([])
+
+pipe_coords = np.array([])
 pipe_coords_tm = np.array([])
-pipe_depth = np.zeros(0, dtype=np.double)
+pipe_coords_tm_interp = np.array([])
+pipe_depth = np.array([])
+
 gps_coords = np.zeros(4, dtype=np.double)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
 gps_coords_tm = np.zeros(4, dtype=np.double)  # tm coordinates for gps coordinates
 bucket_local_pos = np.zeros(3, dtype=np.double)  # x-axis, y-axis, z-axis
@@ -78,7 +81,7 @@ def can_com_ic_controller():
 
 
 def can_com_cd_controller():
-    global cd_query, pipe_depth, receive_state, done_state, pipe_boundary_coord, pipe_coords_tm
+    global cd_query, receive_state, done_state, pipe_coords, pipe_depth, pipe_coords_tm, pipe_coords_tm_interp
     for can_msg in can_channel_cd:
         safety_control_msg.get_cd_state(packet=can_msg)
         safety_control_msg.get_equip_pos(packet=can_msg)
@@ -105,6 +108,7 @@ def can_com_cd_controller():
                 for i, pipe_coord in enumerate(pipe_coords):  # convert TM coordinate of pipe coordinate
                     pipe_coords_tm[i, 1], pipe_coords_tm[i, 0] = gps_unit_change(latitude=pipe_coord[0], longitude=pipe_coord[1])
 
+                pipe_coords_tm_interp = interp_2d_target(pipe_coords_tm, step=10)
                 # pipe_boundary_coord = get_target_boundary(pipe_coords_tm, radius=0.1, step=10)
                 print(safety_control_msg.read_variable('cd_query'))
                 receive_state = True
@@ -119,7 +123,7 @@ class TcpCom:
 
     def send_msg(self):
         self.tcp_handle.send_msg(np.array2string(tcp_msg.flatten('C'), precision=10, separator=',').lstrip('[').rstrip(']'))
-        tcp_thread = threading.Timer(interval=0.1, function=self.send_msg, args=())
+        tcp_thread = threading.Timer(interval=0.05, function=self.send_msg, args=())
         tcp_thread.daemon = True
         tcp_thread.start()
 
@@ -229,10 +233,12 @@ while True:
         end_point_kinematics(pred_angle[0], pred_angle[1], pred_angle[2])
 
     bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
-                                                                       y_distance=bucket_local_pos[1], heading=excavator_pos[2])
+                                                                       y_distance=bucket_local_pos[1],
+                                                                       heading=excavator_pos[2])
     # recognition to safety status of bucket position
     if pipe_coords_tm.shape[0] > 0:
-        bucket_safety_status = get_safety_status(end_point=bucket_global_pos, target=pipe_coords_tm)
+
+        bucket_safety_status = get_close_pipe_status(end_point=bucket_global_pos, target=pipe_coords_tm_interp)
     else:
         bucket_safety_status = 0
 
@@ -240,20 +246,15 @@ while True:
     work_limit_state = safety_control_msg.read_variable('work_limit')
 
     if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0:
-        est_depth = np.zeros(2, dtype=np.double)
-
-        for i, pos in enumerate(excavator_pos[0:2]):
-            est_depth[i] = np.interp(pos, pipe_coords_tm[:, i], pipe_depth[:, 0])
-
-        target_pipe_depth = np.negative(np.multiply(np.min(est_depth), 1000))
-        target_pipe_depth += 2000
+        target_pipe_depth = est_pipe_depth(target_position=excavator_pos[0:2], pipe_position=pipe_coords_tm,
+                                           pipe_depth=pipe_depth[:, 0])
     else:
         target_pipe_depth = 0
 
     # safety control of bucket position
     if control_state == 0:
         control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2], time_offset=0.7,
-                                                               threshold_signal=2000)
+                                                               threshold_signal=target_pipe_depth)
 
         t0_1 = time.time()
 
@@ -273,7 +274,7 @@ while True:
         safety_state = 0
 
     # create message of safety controller
-    msg_set_ic.append(safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=0,
+    msg_set_ic.append(safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
                                                              excavator_state=excavator_work_state))
 
     msg_set_ic.append(safety_control_msg.create_equip_origin_pos_msg(latitude=excavator_pos[0], longitude=excavator_pos[1]))
@@ -286,14 +287,14 @@ while True:
     msg_set_ic = []
 
     for i, data in enumerate([excavator_pos[0], excavator_pos[1], excavator_pos[2],
-                              bucket_global_pos[0], bucket_global_pos[1], target_pipe_depth, bucket_local_pos[0],
+                              bucket_global_pos[0], bucket_global_pos[1], target_pipe_depth, bucket_local_pos[1],
                               bucket_local_pos[2], pred_angle[0], pred_angle[1], pred_angle[2],
                               safety_state, excavator_work_state]):
         tcp_msg[i] = data
 
-    # print(bucket_local_pos)
+    print(bucket_local_pos)
     # print(safety_control_msg.read_variable('work_limit'))
     # print(excavator_pos[2])
-    print(pred_angle)
-    print(relative_angle)
-    time.sleep(0.1)
+    #print(pred_angle)
+    #print(relative_angle)
+    time.sleep(0.05)

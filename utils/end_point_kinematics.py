@@ -2,25 +2,25 @@ import numpy as np
 import math
 
 
-m_Boom_Length = 4400
-m_Arm_Length = 2110 
-m_Bucket_Length = 1260
-m_Height = 1700
+boom_length = 4400  # unit: mm
+arm_length = 2110   # unit: mm
+bucket_length = 1260  # unit: mm
+height = 1700  # unit: mm
 
 
 def end_point_kinematics(boom_angle: float, arm_angle: float, bucket_angle: float):
     arm_relative_angle = np.multiply(np.subtract(boom_angle, arm_angle), -1)
     bucket_relative_angle = np.multiply(np.subtract(arm_angle, bucket_angle), -1)
 
-    x_pos_boom = m_Boom_Length * np.cos(np.deg2rad(boom_angle))
-    x_pos_arm = m_Arm_Length * np.cos(np.deg2rad(arm_relative_angle))
-    x_pos_bucket = m_Bucket_Length * np.cos(np.deg2rad(bucket_relative_angle))
-    x_pos = x_pos_boom + x_pos_arm + x_pos_bucket
+    x_pos_boom = boom_length * np.cos(np.deg2rad(boom_angle))
+    x_pos_arm = arm_length * np.cos(np.deg2rad(arm_relative_angle))
+    x_pos_bucket = bucket_length * np.cos(np.deg2rad(bucket_relative_angle))
+    x_pos = x_pos_boom + x_pos_arm + bucket_length
 
-    z_pos_boom = m_Boom_Length * np.sin(np.deg2rad(boom_angle))
-    z_pos_arm = m_Arm_Length * np.sin(np.deg2rad(arm_relative_angle))
-    z_pos_bucket = m_Bucket_Length * np.sin(np.deg2rad(bucket_relative_angle))
-    z_pos = z_pos_boom + z_pos_arm + z_pos_bucket + m_Height
+    z_pos_boom = boom_length * np.sin(np.deg2rad(boom_angle))
+    z_pos_arm = arm_length * np.sin(np.deg2rad(arm_relative_angle))
+    z_pos_bucket = bucket_length * np.sin(np.deg2rad(bucket_relative_angle))
+    z_pos = (z_pos_boom + z_pos_arm + height) - bucket_length
 
     return x_pos, z_pos, arm_relative_angle, bucket_relative_angle
 

@@ -4,6 +4,9 @@ from numba import jit
 from typing import Tuple, List
 
 
+est_depth = np.zeros(2, dtype=np.double)
+
+
 def interp_2d_target(target_pos: np.ndarray, step) -> np.ndarray:  # target_pos: np.ndarray of n*2
     x_output = np.array([])
     y_output = np.array([])
@@ -19,6 +22,13 @@ def interp_2d_target(target_pos: np.ndarray, step) -> np.ndarray:  # target_pos:
                                                        target_pos[target_pos.shape[0]-1, 1]]))
 
     return target_interp_pos
+
+
+def est_pipe_depth(target_position: np.ndarray, pipe_position: np.ndarray, pipe_depth: np.ndarray) -> float:
+    for i, pos in enumerate(target_position):
+        est_depth[i] = np.interp(x=pos, xp=pipe_position[:, i], fp=pipe_depth)
+
+    return np.multiply(np.min(est_depth), 1000)
 
 
 def get_target_boundary(target_pos: np.ndarray, radius: np.ndarray, step: int = 10) -> np.ndarray:
@@ -92,7 +102,7 @@ def get_global_bucket_pos(origin: List, y_distance, heading: float) -> Tuple[flo
     return latitude, longitude
 
 
-def get_safety_status(end_point: np.ndarray, target: np.ndarray) -> int:
-    end_point_status = 1 if np.sum(__get_distance(end_point, target) < 0.01) else 0
+def get_close_pipe_status(bucket_global_pos: np.ndarray, pipe_pos: np.ndarray) -> int:
+    end_point_status = 1 if np.sum(__get_distance(bucket_global_pos, pipe_pos) < 0.01) else 0
 
     return end_point_status
