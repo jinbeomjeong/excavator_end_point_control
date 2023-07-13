@@ -232,12 +232,12 @@ class JoystickMsgParser:
 
     def get_joystick_values(self, packet: can.Message):
         if packet.arbitration_id == self.__left_joystick_can_id:
-            self.__left_x_position = packet.data[1]
-            self.__left_y_position = packet.data[3]
+            self.__left_x_position = packet.data[3]
+            self.__left_y_position = packet.data[1]
 
         if packet.arbitration_id == self.__right_joystick_can_id:
-            self.__right_x_position = packet.data[1]
-            self.__right_y_position = packet.data[3]
+            self.__right_x_position = packet.data[3]
+            self.__right_y_position = packet.data[1]
 
     def read_joystick_value(self, parameter_name='') -> float:
         if parameter_name == 'left_x_position':

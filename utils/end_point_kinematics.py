@@ -8,19 +8,36 @@ bucket_length = 1260  # unit: mm
 height = 1700  # unit: mm
 
 
-def end_point_kinematics(boom_angle: float, arm_angle: float, bucket_angle: float):
+def end_point_kinematics_relative(boom_angle: float, arm_angle: float, bucket_angle: float):
     arm_relative_angle = np.multiply(np.subtract(boom_angle, arm_angle), -1)
     bucket_relative_angle = np.multiply(np.subtract(arm_angle, bucket_angle), -1)
 
     x_pos_boom = boom_length * np.cos(np.deg2rad(boom_angle))
     x_pos_arm = arm_length * np.cos(np.deg2rad(arm_relative_angle))
     x_pos_bucket = bucket_length * np.cos(np.deg2rad(bucket_relative_angle))
-    x_pos = x_pos_boom + x_pos_arm + bucket_length
+    x_pos = x_pos_boom + x_pos_arm
 
     z_pos_boom = boom_length * np.sin(np.deg2rad(boom_angle))
     z_pos_arm = arm_length * np.sin(np.deg2rad(arm_relative_angle))
     z_pos_bucket = bucket_length * np.sin(np.deg2rad(bucket_relative_angle))
-    z_pos = (z_pos_boom + z_pos_arm + height) - bucket_length
+    z_pos = z_pos_boom + z_pos_arm + height
+
+    return x_pos, z_pos, arm_relative_angle, bucket_relative_angle
+
+
+def end_point_kinematics_abs(boom_angle: float, arm_angle: float, bucket_angle: float):
+    arm_relative_angle = np.multiply(np.subtract(boom_angle, arm_angle), -1)
+    bucket_relative_angle = np.multiply(np.subtract(arm_angle, bucket_angle), -1)
+
+    x_pos_boom = boom_length * np.cos(np.deg2rad(boom_angle))
+    x_pos_arm = arm_length * np.cos(np.deg2rad(arm_angle))
+    x_pos_bucket = bucket_length * np.cos(np.deg2rad(bucket_angle))
+    x_pos = x_pos_boom + x_pos_arm + x_pos_bucket
+
+    z_pos_boom = boom_length * np.sin(np.deg2rad(boom_angle))
+    z_pos_arm = arm_length * np.sin(np.deg2rad(arm_angle))
+    z_pos_bucket = bucket_length * np.sin(np.deg2rad(bucket_angle))
+    z_pos = z_pos_boom + z_pos_arm + z_pos_bucket + height
 
     return x_pos, z_pos, arm_relative_angle, bucket_relative_angle
 
