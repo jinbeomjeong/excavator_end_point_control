@@ -30,49 +30,43 @@ safety_control_msg = SafetyControlMsgParser()
 
 # initialize internal variable
 msg_set_ic, msg_set_cd = [], []
-msg_get_cd = []
-control_state: int = 0
+control_state, safety_state = 0, 0
 target_pipe_depth: float = 0.0
 t0_1: float = 0.0
 sc_state: int = 1
-safety_state: int = 0
 excavator_work_state = np.zeros(8, np.uint8)  # 1byte position: movement, 2byte position: work status
 cd_query = 'none'
-receive_state = True
-done_state = True
+receive_state, done_state = True, True
 
-pipe_coords = np.array([])
-pipe_coords_tm = np.array([])
-pipe_coords_tm_interp = np.array([])
-pipe_depth = np.array([])
+pipe_coords, pipe_coords_tm, pipe_coords_tm_interp, pipe_depth = np.array([]), np.array([]), np.array([]), np.array([])
 
-gps_coords = np.zeros(4, dtype=np.double)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
-gps_coords_tm = np.zeros(4, dtype=np.double)  # tm coordinates for gps coordinates
-bucket_local_pos = np.zeros(3, dtype=np.double)  # x-axis, y-axis, z-axis
-bucket_global_pos = np.zeros(2, dtype=np.double)  # latitude, longitude
+gps_coords = np.zeros(4, dtype=np.float64)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
+gps_coords_tm = np.zeros(4, dtype=np.float64)  # tm coordinates for gps coordinates
+bucket_local_pos = np.zeros(3, dtype=np.float64)  # x-axis, y-axis, z-axis
+bucket_global_pos = np.zeros(2, dtype=np.float64)  # latitude, longitude
 
 # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
 joystick_pos = np.zeros(4, dtype=np.uint8)
 
-excavator_angle = np.zeros(4, dtype=np.double)  # boom, arm and bucket angle
-pred_angle = np.zeros(4, dtype=np.double)  # predict of boom, arm and bucket angle
+excavator_angle = np.zeros(4, dtype=np.float64)  # boom, arm and bucket angle
+pred_angle = np.zeros(4, dtype=np.float64)  # predict of boom, arm and bucket angle
 bucket_4_link_angle = 0.0
 cal_bucket = 0.0
 cal_bucket_prv = 0.0
 cal_bucket_result = 0.0
-angle_sensor_offset = np.array([268.5, 265.6, 386.9, 0], dtype=np.double)  # offset angle of boom, arm, bucket and body
+angle_sensor_offset = np.array([268.5, 265.6, 386.9, 0], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 
 angle_sensor_offset.flags.writeable = False
-relative_angle = np.zeros(2, dtype=np.double)  # arm relative, bucket relative
-excavator_pos = np.zeros(3, dtype=np.double)  # latitude, longitude, heading
+relative_angle = np.zeros(2, dtype=np.float64)  # arm relative, bucket relative
+excavator_pos = np.zeros(3, dtype=np.float64)  # latitude, longitude, heading
 
 logging_data: pd.DataFrame = pd.DataFrame()
 elapsed_time: float = 0.0
 
 # excavator_tm_latitude, excavator_tm_longitude, heading
 # bucket_goal_x_pos, bucket_goal_y_pos, bucket_z_pos, target_depth
-tcp_msg = np.zeros(13, dtype=np.double)
+tcp_msg = np.zeros(13, dtype=np.float64)
 
 
 def can_com_ic_controller():
@@ -125,15 +119,13 @@ def can_com_ic_send():
 
     while True:
         msg_set_ic.append(safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
-                                                                 excavator_state=excavator_work_state))
+                                                                 excavator_state=np.packbits(excavator_work_state)[0]))
         msg_set_ic.append(safety_control_msg.create_equip_origin_pos_msg(latitude=excavator_pos[0], longitude=excavator_pos[1]))
         msg_set_ic.append(safety_control_msg.create_equip_heading_msg(heading=excavator_pos[2]))
         msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=pred_angle[0], arm_angle=relative_angle[0],
                                                                    bucket_angle=relative_angle[1]))
-
         for msg_ic in msg_set_ic:
             can_channel_ic.send(msg_ic)
-           # print(msg_ic)
 
         msg_set_ic = []
 
