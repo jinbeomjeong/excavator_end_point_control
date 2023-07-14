@@ -6,6 +6,7 @@ from typing import Tuple, List
 
 est_depth = np.zeros(2, dtype=np.double)
 in_range_x_pos, in_range_y_pos = 0, 0
+bucket_in_range = []
 
 
 def interp_2d_target(target_pos: np.ndarray, step) -> np.ndarray:  # target_pos: np.ndarray of n*2
@@ -48,19 +49,21 @@ def get_target_boundary(target_pos: np.ndarray, radius: np.ndarray, step: int = 
     target_bound_max_interp = interp_2d_target(target_bound_max, step=step)
     target_bound_min_interp = interp_2d_target(target_bound_min, step=step)
 
-    return np.stack([target_bound_max_interp, target_bound_min_interp])  # output: np.ndarray of 3*n*2
+    return np.stack([target_bound_max_interp, target_bound_min_interp])  # output: np.ndarray of 2*n*2
 
 
 def recognition_in_range_boundary(input_pos: np.ndarray, target_pos_max: np.ndarray, target_pos_min: np.ndarray) -> int:
-    global in_range_x_pos, in_range_y_pos
+    global in_range_x_pos, in_range_y_pos, bucket_in_range
+    bucket_in_range = []
 
     for i in range(target_pos_min.shape[0]):
-        in_range_x_pos = np.all([np.min([target_pos_min[i, 0], target_pos_max[i, 0]]) < input_pos[0],
-                                 input_pos[0] < np.max([target_pos_min[i, 0], target_pos_max[i, 0]])])*1
-        in_range_y_pos = np.all([np.min([target_pos_min[i, 1], target_pos_max[i, 1]]) < input_pos[1],
-                                 input_pos[1] < np.max([target_pos_min[i, 1], target_pos_max[i, 1]])])*1
+        in_range_y_pos = np.all([np.min([target_pos_min[i, 0], target_pos_max[i, 0]]) < input_pos[0],
+                                 input_pos[0] < np.max([target_pos_min[i, 0], target_pos_max[i, 0]])])
+        in_range_x_pos = np.all([np.min([target_pos_min[i, 1], target_pos_max[i, 1]]) < input_pos[1],
+                                 input_pos[1] < np.max([target_pos_min[i, 1], target_pos_max[i, 1]])])
+        bucket_in_range.append(np.all([in_range_y_pos, in_range_x_pos]))
 
-    return in_range_x_pos*in_range_y_pos
+    return np.any(bucket_in_range)*1
 
 
 def get_working_area(origin, radius):

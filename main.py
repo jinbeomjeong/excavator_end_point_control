@@ -6,7 +6,8 @@ from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
 from utils.end_point_kinematics import end_point_kinematics_abs, link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
-from utils.warning_target import get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth
+from utils.warning_target import get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth, \
+    get_target_boundary, recognition_in_range_boundary
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
 from typing import Final, List
@@ -30,27 +31,25 @@ safety_control_msg = SafetyControlMsgParser()
 
 # initialize internal variable
 msg_set_ic, msg_set_cd = [], []
-control_state, safety_state = 0, 0
-target_pipe_depth: float = 0.0
+control_state, safety_state, target_pipe_depth, bucket_in_range = 0, 0, 0, 0
 t0_1: float = 0.0
 sc_state: int = 1
 excavator_work_state = np.zeros(8, np.uint8)  # 1byte position: movement, 2byte position: work status
 cd_query = 'none'
 receive_state, done_state = True, True
 
-pipe_coords, pipe_coords_tm, pipe_coords_tm_interp, pipe_depth = np.array([]), np.array([]), np.array([]), np.array([])
+pipe_coords, pipe_coords_tm = np.array([]), np.array([])
+pipe_coords_tm_interp, pipe_boundary_coords_tm = np.array([]), np.array([])
+pipe_depth, pipe_diameter = np.array([]), np.array([])
 
-gps_coords = np.zeros(4, dtype=np.float64)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
-gps_coords_tm = np.zeros(4, dtype=np.float64)  # tm coordinates for gps coordinates
+gps_coords, gps_coords_tm = np.zeros(4, dtype=np.float64), np.zeros(4, dtype=np.float64)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
 bucket_local_pos = np.zeros(3, dtype=np.float64)  # x-axis, y-axis, z-axis
 bucket_global_pos = np.zeros(2, dtype=np.float64)  # latitude, longitude
 
 # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
 joystick_pos = np.zeros(4, dtype=np.uint8)
-
-excavator_angle = np.zeros(4, dtype=np.float64)  # boom, arm and bucket angle
-pred_angle = np.zeros(4, dtype=np.float64)  # predict of boom, arm and bucket angle
+excavator_angle, pred_angle = np.zeros(4, dtype=np.float64), np.zeros(4, dtype=np.float64)  # boom, arm and bucket angle
 bucket_4_link_angle = 0.0
 cal_bucket = 0.0
 cal_bucket_prv = 0.0
@@ -66,7 +65,7 @@ elapsed_time: float = 0.0
 
 # excavator_tm_latitude, excavator_tm_longitude, heading
 # bucket_goal_x_pos, bucket_goal_y_pos, bucket_z_pos, target_depth
-tcp_msg = np.zeros(13, dtype=np.float64)
+tcp_msg = np.zeros(14, dtype=np.float64)
 
 
 def can_com_ic_controller():
@@ -80,7 +79,9 @@ def can_com_ic_controller():
 
 
 def can_com_cd_controller():
-    global cd_query, receive_state, done_state, pipe_coords, pipe_depth, pipe_coords_tm, pipe_coords_tm_interp
+    global cd_query, receive_state, done_state, pipe_coords, pipe_depth, pipe_coords_tm, pipe_coords_tm_interp, \
+        pipe_diameter, pipe_boundary_coords_tm
+
     for can_msg in can_channel_cd:
         safety_control_msg.get_cd_state(packet=can_msg)
         safety_control_msg.get_equip_pos(packet=can_msg)
@@ -101,14 +102,15 @@ def can_com_cd_controller():
         elif cd_query == 'done':
             if done_state:
                 pipe_coords = safety_control_msg.read_variable('under_utils_coord_data')  # pipe pos of latitude, longitude
-                pipe_depth = safety_control_msg.read_variable('under_utils_depth_data')  # pipe depth and diameter
+                pipe_property = safety_control_msg.read_variable('under_utils_depth_data')  # pipe depth and diameter
                 pipe_coords_tm = np.zeros((pipe_coords.shape[0], 2), dtype=np.double)
+                pipe_depth, pipe_diameter = pipe_property[:, 0], pipe_property[:, 1]
 
                 for i, pipe_coord in enumerate(pipe_coords):  # convert TM coordinate of pipe coordinate
                     pipe_coords_tm[i, 1], pipe_coords_tm[i, 0] = gps_unit_change(latitude=pipe_coord[0], longitude=pipe_coord[1])
 
                 pipe_coords_tm_interp = interp_2d_target(pipe_coords_tm, step=10)
-                # pipe_boundary_coord = get_target_boundary(pipe_coords_tm, radius=0.1, step=10)
+                pipe_boundary_coords_tm = get_target_boundary(pipe_coords_tm, radius=pipe_diameter/2, step=10)
                 print(safety_control_msg.read_variable('cd_query'))
                 receive_state = True
                 done_state = False
@@ -234,8 +236,8 @@ while True:
     excavator_pos[0], excavator_pos[1] = est_gps_center(gps_1_coord=gps_coords_tm[0:2], gps_2_coord=gps_coords_tm[2:4], offset=1.16)
 
     # calculation of excavator heading angle
-    excavator_pos[2] = calculation_heading(gps_x_1=gps_coords_tm[1], gps_x_2=gps_coords_tm[3],
-                                           gps_y_1=gps_coords_tm[0], gps_y_2=gps_coords_tm[2])
+    excavator_pos[2] = 360-(calculation_heading(gps_x_1=gps_coords_tm[1], gps_x_2=gps_coords_tm[3],
+                                                gps_y_1=gps_coords_tm[0], gps_y_2=gps_coords_tm[2]))
 
     # read value and execution offset and execution low pass filter of angle sensor
     for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor, body_sensor]):
@@ -283,9 +285,15 @@ while True:
     bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
                                                                        y_distance=bucket_local_pos[1],
                                                                        heading=excavator_pos[2])
+    if pipe_coords_tm.shape[0] > 0:
+        bucket_in_range = recognition_in_range_boundary(input_pos=bucket_global_pos,
+                                                        target_pos_max=pipe_boundary_coords_tm[0],
+                                                        target_pos_min=pipe_boundary_coords_tm[1])
+    else:
+        bucket_in_range = 0
+
     # recognition to safety status of bucket position
     if pipe_coords_tm.shape[0] > 0:
-
         bucket_safety_status = get_close_pipe_status(bucket_global_pos=bucket_global_pos,
                                                      pipe_pos=pipe_coords_tm_interp)
     else:
@@ -296,7 +304,7 @@ while True:
 
     if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0:
         target_pipe_depth = est_pipe_depth(target_position=excavator_pos[0:2], pipe_position=pipe_coords_tm,
-                                           pipe_depth=pipe_depth[:, 0])
+                                           pipe_depth=pipe_depth)
     else:
         target_pipe_depth = 100
 
@@ -347,7 +355,7 @@ while True:
     for i, data in enumerate([excavator_pos[0], excavator_pos[1], excavator_pos[2],
                               bucket_global_pos[0], bucket_global_pos[1], target_pipe_depth, bucket_local_pos[1],
                               bucket_local_pos[2], pred_angle[0], pred_angle[1], pred_angle[2],
-                              safety_state, np.packbits(excavator_work_state)[0]]):
+                              safety_state, np.packbits(excavator_work_state)[0], bucket_in_range]):
         tcp_msg[i] = data
 
     # print(bucket_local_pos)
@@ -357,5 +365,6 @@ while True:
     # print(relative_angle, bucket_4_link_angle, (bucket_4_link_angle*1.8)+162)
     # print(bucket_4_link_angle)
     # print(joystick_pos)
-    print(np.packbits(excavator_work_state)[0])
+    # print(np.packbits(excavator_work_state)[0])
+    print(bucket_in_range)
     time.sleep(0.1)
