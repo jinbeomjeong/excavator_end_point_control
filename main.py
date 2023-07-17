@@ -286,9 +286,11 @@ while True:
                                                                        y_distance=bucket_local_pos[1],
                                                                        heading=excavator_pos[2])
     if pipe_coords_tm.shape[0] > 0:
+        ''''
         bucket_in_range = recognition_in_range_boundary(input_pos=bucket_global_pos,
                                                         target_pos_max=pipe_boundary_coords_tm[0],
-                                                        target_pos_min=pipe_boundary_coords_tm[1])
+                                                    target_pos_min=pipe_boundary_coords_tm[1])
+        '''
     else:
         bucket_in_range = 0
 
@@ -304,9 +306,9 @@ while True:
 
     if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0:
         target_pipe_depth = est_pipe_depth(target_position=excavator_pos[0:2], pipe_position=pipe_coords_tm,
-                                           pipe_depth=pipe_depth)
+                                           pipe_depth=np.negative(pipe_depth))
     else:
-        target_pipe_depth = 100
+        target_pipe_depth = 500
 
     # safety control of bucket position
     if control_state == 0:
@@ -366,5 +368,6 @@ while True:
     # print(bucket_4_link_angle)
     # print(joystick_pos)
     # print(np.packbits(excavator_work_state)[0])
-    print(bucket_in_range)
+    print('n of pipe data', pipe_coords.shape[0])
+    print('bucket in range', bucket_in_range)
     time.sleep(0.1)
