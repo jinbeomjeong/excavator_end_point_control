@@ -31,7 +31,7 @@ safety_control_msg = SafetyControlMsgParser()
 
 # initialize internal variable
 msg_set_ic, msg_set_cd = [], []
-control_state, safety_state, target_pipe_depth, bucket_in_range = 0, 0, 0, 0
+control_state, safety_state, target_pipe_depth, bucket_in_range, pipe_rela_dist = 0, 0, 0, 0, 0
 t0_1: float = 0.0
 sc_state: int = 1
 excavator_work_state = np.zeros(8, np.uint8)  # 1byte position: movement, 2byte position: work status
@@ -307,8 +307,12 @@ while True:
     if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0:
         target_pipe_depth = est_pipe_depth(target_position=excavator_pos[0:2], pipe_position=pipe_coords_tm,
                                            pipe_depth=np.negative(pipe_depth))
+        pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
+        pipe_rela_dist = np.abs(pipe_rela_dist) if pipe_rela_dist > 0 else 0
+
     else:
-        target_pipe_depth = 500
+        target_pipe_depth = 500  # surface distance
+        pipe_rela_dist = 9999  # invalid pipe relative distance
 
     # safety control of bucket position
     if control_state == 0:
@@ -340,6 +344,7 @@ while True:
     msg_set_ic.append(safety_control_msg.create_equip_heading_msg(heading=excavator_pos[2]))
     msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=pred_angle[0], arm_angle=relative_angle[0],
                                                                bucket_angle=(bucket_4_link_angle*1.8)+162))
+    msg_set_ic.append(safety_control_msg.create_target_relative_distance_msg(distance=pipe_rela_dist))
 
     for message_ic in msg_set_ic:
         can_channel_ic.send(message_ic)

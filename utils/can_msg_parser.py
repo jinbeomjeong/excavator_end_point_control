@@ -19,6 +19,7 @@ class SafetyControlMsgParser:
         self.__compensation_angle_id = 0x18FF1013  # SC -> IC
         self.__equipment_origin_pos_id = 0x18FF1014  # SC -> IC, CD
         self.__equipment_origin_heading_id = 0x18FF1015  # SC -> IC, CD
+        self.__target_relative_distance_id = 0x18FF1018  # SC -> IC
 
         self.__ic_state: str = 'none'
         self.__cd_state: str = 'none'
@@ -186,6 +187,13 @@ class SafetyControlMsgParser:
     def create_ic_state_msg(self, ic_state: int = 0) -> can.Message:
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__sc_state_id, data=[ic_state],
                                is_extended_id=True)
+        return send_msg
+
+    def create_target_relative_distance_msg(self, distance: int = 0) -> can.Message:
+        payload = distance.to_bytes(2, byteorder='little')
+        send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__target_relative_distance_id,
+                               data=payload, is_extended_id=True)
+
         return send_msg
 
     def read_variable(self, parameter_name: str = ''):
