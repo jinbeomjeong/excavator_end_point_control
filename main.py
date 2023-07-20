@@ -33,7 +33,7 @@ safety_control_msg = SafetyControlMsgParser()
 msg_set_ic, msg_set_cd = [], []
 control_state, safety_state, target_pipe_depth, bucket_in_range, pipe_rela_dist = 0, 0, 0, 0, 0
 t0_1: float = 0.0
-sc_state: int = 1
+ic_state, cd_state, sc_state = 0, 0, 0
 excavator_work_state = np.zeros(8, np.uint8)  # 1byte position: movement, 2byte position: work status
 cd_query = 'none'
 receive_state, done_state = True, True
@@ -223,6 +223,8 @@ print('algorithm is running...')
 
 while True:
     elapsed_time = time.time() - start_time
+    ic_state = safety_control_msg.read_variable('ic_state')
+    cd_state = safety_control_msg.read_variable('cd_state')
 
     # read value of gps data
     for i, cal_pos in enumerate(safety_control_msg.read_variable('equipment_cal_pos_data')):
@@ -345,6 +347,8 @@ while True:
     msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=pred_angle[0], arm_angle=relative_angle[0],
                                                                bucket_angle=(bucket_4_link_angle*1.8)+162))
     msg_set_ic.append(safety_control_msg.create_target_relative_distance_msg(distance=pipe_rela_dist))
+    msg_set_ic.append(safety_control_msg.create_cd_state_msg(state=cd_state,
+                                                             work_limit=0 if work_limit_state == 'de-active' else 1))
 
     for message_ic in msg_set_ic:
         can_channel_ic.send(message_ic)

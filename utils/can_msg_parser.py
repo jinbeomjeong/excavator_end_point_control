@@ -10,16 +10,16 @@ class SafetyControlMsgParser:
         self.__ic_state_id: Final[int] = 0x18FF1010
         self.__cd_state_id: Final[int] = 0x18FF1011
         self.__sc_state_id: Final[int] = 0x18FF1012
-        self.__under_utils_query_cd_id = 0x18FF3010  # CD -> SC
-        self.__under_utils_query_sc_id = 0x18FF3011  # SC -> CD
-        self.__equipment_coord_frame_left_id = 0x18FF5010  # CD -> IC/SC
-        self.__equipment_coord_frame_right_id = 0x18FF5020  # CD -> IC/SC
-        self.__equipment_coord_frame_left_altitude_id = 0x18FF5011  # CD -> IC/SC
-        self.__equipment_coord_frame_right_altitude_id = 0x18FF5021
-        self.__compensation_angle_id = 0x18FF1013  # SC -> IC
-        self.__equipment_origin_pos_id = 0x18FF1014  # SC -> IC, CD
-        self.__equipment_origin_heading_id = 0x18FF1015  # SC -> IC, CD
-        self.__target_relative_distance_id = 0x18FF1018  # SC -> IC
+        self.__under_utils_query_cd_id: Final[int] = 0x18FF3010  # CD -> SC
+        self.__under_utils_query_sc_id: Final[int] = 0x18FF3011  # SC -> CD
+        self.__equipment_coord_frame_left_id: Final[int] = 0x18FF5010  # CD -> IC/SC
+        self.__equipment_coord_frame_right_id: Final[int] = 0x18FF5020  # CD -> IC/SC
+        self.__equipment_coord_frame_left_altitude_id: Final[int] = 0x18FF5011  # CD -> IC/SC
+        self.__equipment_coord_frame_right_altitude_id: Final[int] = 0x18FF5021
+        self.__compensation_angle_id: Final[int] = 0x18FF1013  # SC -> IC
+        self.__equipment_origin_pos_id: Final[int] = 0x18FF1014  # SC -> IC, CD
+        self.__equipment_origin_heading_id: Final[int] = 0x18FF1015  # SC -> IC, CD
+        self.__target_relative_distance_id: Final[int] = 0x18FF1018  # SC -> IC
 
         self.__ic_state: str = 'none'
         self.__cd_state: str = 'none'
@@ -61,9 +61,9 @@ class SafetyControlMsgParser:
                 self.__cd_state = 'on'
 
             if payload[0] == 0:
-                self.__work_limit = 'de-active'
-            elif payload[0] == 1:
                 self.__work_limit = 'active'
+            elif payload[0] == 1:
+                self.__work_limit = 'de-active'
 
     def get_under_utils_query(self, packet=can.Message()):
         if packet.arbitration_id == self.__under_utils_query_cd_id:
@@ -193,6 +193,13 @@ class SafetyControlMsgParser:
         payload = distance.to_bytes(2, byteorder='little')
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__target_relative_distance_id,
                                data=payload, is_extended_id=True)
+
+        return send_msg
+
+    def create_cd_state_msg(self, state: int = 0, work_limit: int = 0) -> can.Message:
+        payload = [state, work_limit]
+        send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__cd_state_id, data=payload,
+                               is_extended_id=True)
 
         return send_msg
 
