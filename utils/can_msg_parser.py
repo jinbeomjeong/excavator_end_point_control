@@ -177,10 +177,9 @@ class SafetyControlMsgParser:
         return send_msg
 
     def create_under_utils_query_msg(self, request_msg: int = 0) -> can.Message:
-
-        pay_load = [request_msg]
+        payload = [request_msg]
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__under_utils_query_sc_id,
-                               data=pay_load, is_extended_id=True)
+                               data=payload, is_extended_id=True)
 
         return send_msg
 
@@ -189,8 +188,10 @@ class SafetyControlMsgParser:
                                is_extended_id=True)
         return send_msg
 
-    def create_target_relative_distance_msg(self, distance: int = 0) -> can.Message:
-        payload = distance.to_bytes(2, byteorder='little')
+    def create_target_relative_distance_msg(self, state: int = 0, distance: int = 0) -> can.Message:
+        payload = bytes(0)
+        payload += state.to_bytes(length=1, byteorder='little')
+        payload += distance.to_bytes(length=2, byteorder='little')
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__target_relative_distance_id,
                                data=payload, is_extended_id=True)
 
@@ -206,6 +207,9 @@ class SafetyControlMsgParser:
     def read_variable(self, parameter_name: str = ''):
         if parameter_name == 'ic_state':
             return self.__ic_state
+
+        elif parameter_name == 'cd_state':
+            return self.__cd_state
 
         elif parameter_name == 'cd_query':
             return self.__cd_query

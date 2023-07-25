@@ -31,9 +31,10 @@ safety_control_msg = SafetyControlMsgParser()
 
 # initialize internal variable
 msg_set_ic, msg_set_cd = [], []
-control_state, safety_state, target_pipe_depth, bucket_in_range, pipe_rela_dist = 0, 0, 0, 0, 0
+control_state, safety_state, bucket_in_range, pipe_rela_dist = 0, 0, 0, 0
 t0_1: float = 0.0
 ic_state, cd_state, sc_state = 0, 0, 0
+target_pipe_depth: int = 500
 excavator_work_state = np.zeros(8, np.uint8)  # 1byte position: movement, 2byte position: work status
 cd_query = 'none'
 receive_state, done_state = True, True
@@ -224,7 +225,7 @@ print('algorithm is running...')
 while True:
     elapsed_time = time.time() - start_time
     ic_state = safety_control_msg.read_variable('ic_state')
-    cd_state = safety_control_msg.read_variable('cd_state')
+    cd_state_str = safety_control_msg.read_variable('cd_state')
 
     # read value of gps data
     for i, cal_pos in enumerate(safety_control_msg.read_variable('equipment_cal_pos_data')):
@@ -305,12 +306,17 @@ while True:
 
     # get target pipe depth
     work_limit_state = safety_control_msg.read_variable('work_limit')
+    work_limit_state = 'de-active'
 
-    if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0:
+    if work_limit_state == 'de-active' or pipe_coords_tm.shape[0] > 0:
+        '''
         target_pipe_depth = est_pipe_depth(target_position=excavator_pos[0:2], pipe_position=pipe_coords_tm,
                                            pipe_depth=np.negative(pipe_depth))
         pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
+        '''
+        pipe_rela_dist = bucket_local_pos[2]
         pipe_rela_dist = np.abs(pipe_rela_dist) if pipe_rela_dist > 0 else 0
+        pipe_rela_dist = int(pipe_rela_dist/10)
 
     else:
         target_pipe_depth = 500  # surface distance
@@ -346,7 +352,7 @@ while True:
     msg_set_ic.append(safety_control_msg.create_equip_heading_msg(heading=excavator_pos[2]))
     msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=pred_angle[0], arm_angle=relative_angle[0],
                                                                bucket_angle=(bucket_4_link_angle*1.8)+162))
-    msg_set_ic.append(safety_control_msg.create_target_relative_distance_msg(distance=pipe_rela_dist))
+    msg_set_ic.append(safety_control_msg.create_target_relative_distance_msg(state=1, distance=pipe_rela_dist))
     msg_set_ic.append(safety_control_msg.create_cd_state_msg(state=cd_state,
                                                              work_limit=0 if work_limit_state == 'de-active' else 1))
 
@@ -369,7 +375,7 @@ while True:
                               safety_state, np.packbits(excavator_work_state)[0], bucket_in_range]):
         tcp_msg[i] = data
 
-    # print(bucket_local_pos)
+    print(bucket_local_pos)
     # print(safety_control_msg.read_variable('work_limit'))
     # print(excavator_pos[2])
     # print(pred_angle)
@@ -377,6 +383,8 @@ while True:
     # print(bucket_4_link_angle)
     # print(joystick_pos)
     # print(np.packbits(excavator_work_state)[0])
-    print('n of pipe data', pipe_coords.shape[0])
-    print('bucket in range', bucket_in_range)
+    # print('n of pipe data', pipe_coords.shape[0])
+    # print('bucket in range', bucket_in_range)
+    print(safety_state)
+    # print(work_limit_state, pipe_rela_dist)
     time.sleep(0.1)
