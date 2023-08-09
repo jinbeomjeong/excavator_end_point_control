@@ -273,13 +273,15 @@ while True:
 
     # recognition of excavator state
     excavator_work_state[7], excavator_work_state[6] = work_status(boom_angle=pred_angle[0], arm_angle=pred_angle[1],
-                                                                   bucket_angle=pred_angle[2],
+                                                                   bucket_angle=pred_angle[2], heading_angle=excavator_pos[2],
                                                                    left_joystick_x_pos=joystick_pos[0],
                                                                    left_joystick_y_pos=joystick_pos[1],
                                                                    right_joystick_x_pos=joystick_pos[2],
                                                                    right_joystick_y_pos=joystick_pos[3],
                                                                    excavator_latitude=excavator_pos[0],
-                                                                   excavator_longitude=excavator_pos[1])
+                                                                   excavator_longitude=excavator_pos[1],
+                                                                   movement_time_threshold=5,
+                                                                   work_time_threshold=3)
 
     # estimation of bucket position
     bucket_local_pos[1], bucket_local_pos[2], relative_angle[0], relative_angle[1] = \
@@ -306,7 +308,7 @@ while True:
 
     # get target pipe depth
     work_limit_state = safety_control_msg.read_variable('work_limit')
-    work_limit_state = 'de-active'
+    # work_limit_state = 'de-active'
 
     if work_limit_state == 'de-active' or pipe_coords_tm.shape[0] > 0:
         '''
@@ -375,7 +377,7 @@ while True:
                               safety_state, np.packbits(excavator_work_state)[0], bucket_in_range]):
         tcp_msg[i] = data
 
-    print(bucket_local_pos)
+    # print(bucket_local_pos)
     # print(safety_control_msg.read_variable('work_limit'))
     # print(excavator_pos[2])
     # print(pred_angle)
@@ -385,6 +387,7 @@ while True:
     # print(np.packbits(excavator_work_state)[0])
     # print('n of pipe data', pipe_coords.shape[0])
     # print('bucket in range', bucket_in_range)
-    print(safety_state)
+    # print(safety_state)
     # print(work_limit_state, pipe_rela_dist)
+    print(excavator_work_state)
     time.sleep(0.1)

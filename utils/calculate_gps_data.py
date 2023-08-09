@@ -54,13 +54,6 @@ def calculation_heading(gps_x_1, gps_x_2, gps_y_1, gps_y_2) -> float:  #GPS 2개
     return theta
 
 
-'''
-#//선회각도 반영한 회전변환 좌표 //진북 0도 기준
-m_nX_1 = m_nX*np.cos(Heading_ANG*(np.pi/180))  # %x축 회전변환 좌표
-m_nY_1 = m_nX*np.sin(Heading_ANG*(np.pi/180))  # %y축 회전변환 좌표
-'''
-
-
 def to_cartesian(lat, lon):
     lat_rad = math.radians(lat)
     lon_rad = math.radians(lon)
