@@ -26,12 +26,12 @@ class SafetyControlMsgParser:
         self.__work_limit: str = 'de-active'
         self.__cd_query: str = 'none'
         self.__n_of_under_utils: int = 0
-        self.__equipment_raw_pos: np.ndarray = np.zeros(4, dtype=np.uint32)  # gps_1_y, gps_1_x, gps_2_y, gps_2_x
-        self.__equipment_cal_pos: np.ndarray = np.zeros(4, dtype=np.double)
-        self.__equipment_origin_pos: np.ndarray = np.zeros(2, dtype=np.double)  # longitude, latitude, heading
-        self.__equipment_altitude: np.ndarray = np.zeros(2, dtype=np.double)  # gps_1_altitude, gps_2_altitude
+        self.__equipment_raw_pos: np.ndarray = np.zeros(shape=4, dtype=np.uint32)  # gps_1_y, gps_1_x, gps_2_y, gps_2_x
+        self.__equipment_cal_pos: np.ndarray = np.zeros(shape=4, dtype=np.double)
+        self.__equipment_origin_pos: np.ndarray = np.zeros(shape=2, dtype=np.double)  # longitude, latitude, heading
+        self.__equipment_altitude: np.ndarray = np.zeros(shape=2, dtype=np.double)  # gps_1_altitude, gps_2_altitude
         self.__bucket_position_data: [int] = [0] * 3  # x_pos, y_pos, z_pos
-        self.__compensation_angle_data = np.zeros(3, dtype=np.double)
+        self.__compensation_angle_data = np.zeros(shape=3, dtype=np.double)
         self.__class__.get_under_utils_data.called = False
         self.__t0: Final[float] = time.time()
 
@@ -87,8 +87,8 @@ class SafetyControlMsgParser:
         if not self.__class__.get_under_utils_data.called:
             self.__under_utils_coord_id = np.zeros(self.__n_of_under_utils, dtype=np.uint32)
             self.__under_utils_depth_id = np.zeros(self.__n_of_under_utils, dtype=np.uint32)
-            self.__under_utils_coord_data = np.zeros((self.__n_of_under_utils, 2), dtype=np.double)
-            self.__under_utils_depth_dia_data = np.zeros((self.__n_of_under_utils, 2), dtype=np.double)
+            self.__under_utils_coord_data = np.zeros(shape=(self.__n_of_under_utils, 2), dtype=np.double)
+            self.__under_utils_depth_dia_data = np.zeros(shape=(self.__n_of_under_utils, 2), dtype=np.double)
 
             for i in range(self.__n_of_under_utils):
                 self.__under_utils_coord_id[i] = int('0x18FF' + hex(i)[2:4].zfill(2) + '01', base=16)
@@ -149,7 +149,7 @@ class SafetyControlMsgParser:
 
         for comp_angle in self.__compensation_angle_data:
             comp_angle = (comp_angle*10)+3600
-            payload += int(comp_angle).to_bytes(2, byteorder='little')
+            payload += int(comp_angle).to_bytes(length=2, byteorder='little')
 
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__compensation_angle_id,
                                data=payload, is_extended_id=True)
@@ -162,7 +162,7 @@ class SafetyControlMsgParser:
         payload = bytes(0)
 
         for position in self.__equipment_origin_pos:
-            payload += int(position).to_bytes(4, byteorder='little')
+            payload += int(position).to_bytes(length=4, byteorder='little')
 
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__equipment_origin_pos_id,
                                data=payload, is_extended_id=True)
@@ -170,7 +170,7 @@ class SafetyControlMsgParser:
         return send_msg
 
     def create_equip_heading_msg(self, heading: float = 0.0) -> can.Message:
-        payload = int(heading * 10).to_bytes(2, byteorder='little')
+        payload = int(heading * 10).to_bytes(length=2, byteorder='little')
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__equipment_origin_heading_id,
                                data=payload, is_extended_id=True)
 

@@ -35,7 +35,7 @@ control_state, safety_state, bucket_in_range, pipe_rela_dist = 0, 0, 0, 0
 t0_1: float = 0.0
 ic_state, cd_state, sc_state = 0, 0, 0
 target_pipe_depth: int = 500
-excavator_work_state = np.zeros(8, np.uint8)  # 1byte position: movement, 2byte position: work status
+excavator_work_state = np.zeros(shape=8, dtype=np.uint8)  # 1byte position: movement, 2byte position: work status
 cd_query = 'none'
 receive_state, done_state = True, True
 
@@ -43,14 +43,14 @@ pipe_coords, pipe_coords_tm = np.array([]), np.array([])
 pipe_coords_tm_interp, pipe_boundary_coords_tm = np.array([]), np.array([])
 pipe_depth, pipe_diameter = np.array([]), np.array([])
 
-gps_coords, gps_coords_tm = np.zeros(4, dtype=np.float64), np.zeros(4, dtype=np.float64)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
-bucket_local_pos = np.zeros(3, dtype=np.float64)  # x-axis, y-axis, z-axis
-bucket_global_pos = np.zeros(2, dtype=np.float64)  # latitude, longitude
+gps_coords, gps_coords_tm = np.zeros(shape=4, dtype=np.float64), np.zeros(4, dtype=np.float64)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
+bucket_local_pos = np.zeros(shape=3, dtype=np.float64)  # x-axis, y-axis, z-axis
+bucket_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
 
 # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
-joystick_pos = np.zeros(4, dtype=np.uint8)
-excavator_angle, pred_angle = np.zeros(4, dtype=np.float64), np.zeros(4, dtype=np.float64)  # boom, arm and bucket angle
+joystick_pos = np.zeros(shape=4, dtype=np.uint8)
+excavator_angle, pred_angle = np.zeros(shape=4, dtype=np.float64), np.zeros(4, dtype=np.float64)  # boom, arm and bucket angle
 bucket_4_link_angle = 0.0
 cal_bucket = 0.0
 cal_bucket_prv = 0.0
@@ -58,15 +58,15 @@ cal_bucket_result = 0.0
 angle_sensor_offset = np.array([268.5, 265.6, 386.9, 0], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 
 angle_sensor_offset.flags.writeable = False
-relative_angle = np.zeros(2, dtype=np.float64)  # arm relative, bucket relative
-excavator_pos = np.zeros(3, dtype=np.float64)  # latitude, longitude, heading
+relative_angle = np.zeros(shape=2, dtype=np.float64)  # arm relative, bucket relative
+excavator_pos = np.zeros(shape=3, dtype=np.float64)  # latitude, longitude, heading
 
 logging_data: pd.DataFrame = pd.DataFrame()
 elapsed_time: float = 0.0
 
 # excavator_tm_latitude, excavator_tm_longitude, heading
 # bucket_goal_x_pos, bucket_goal_y_pos, bucket_z_pos, target_depth
-tcp_msg = np.zeros(14, dtype=np.float64)
+tcp_msg = np.zeros(shape=14, dtype=np.float64)
 
 
 def can_com_ic_controller():
