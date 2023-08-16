@@ -92,3 +92,54 @@ def convert_bucket_angle(angle: float) -> float:
     angle_t1 = angle
 
     return converted_angle
+
+
+def fcn_1(body_t, boom_t, arm_t):
+    theta_BS_offset = -14.28
+    theta_AS_offset = -7.44
+    boom = boom_t - theta_BS_offset - body_t
+    arm = arm_t - theta_AS_offset - boom - body_t
+    return boom, arm
+
+
+def fcn_2(body_t, boom_ang, arm_ang, bkt_link_t):
+    Lk1, Lk3, Lk4, Lk5, Lk7, Lk2, Lk6, Lk8, Lk9 = 2294.95, 600.325, 515.6565, 2760, 1999.32, 660.7796, 474.3546, 879.2716, 2640.804
+    a3, a4 = 3112.92, 1912.79
+    theta_off3 = -91.0101
+    delta_k1 = cos2ndraw(Lk9, Lk6, a3)
+    delta_k7 = 180 + theta_off3 + bkt_link_t - arm_ang - boom_ang - body_t
+    alpha_k2 = delta_k1 + delta_k7
+    lk_link = cos2ndraw2(alpha_k2, Lk2, Lk6)
+    alpha_k3 = cos2ndraw(Lk2, lk_link, Lk6)
+    alpha_k4 = cos2ndraw(Lk3, lk_link, Lk4)
+    delta_k3 = cos2ndraw(Lk7, Lk4, a4)
+    bkt = 180 - (delta_k1 + alpha_k3 + alpha_k4 + delta_k3)
+    return bkt, delta_k7, lk_link
+
+
+def fwd_kin_30_fun(t1, t2, t3, t4):
+    a1, d4 = 120, 0
+    Lk1, Lk3, Lk4, Lk5, Lk7, Lk2, Lk6, Lk8, Lk9 = 2294.95, 600.325, 515.6565, 2760, 1999.32, 660.7796, 474.3546, 879.2716, 2640.804
+    a2, a3, a4 = 6246.35, 3112.92, 1912.79
+    b1 = 30
+    x = a4*np.cos(np.radians(t1))*np.cos(np.radians(t2+t3+t4))+a3*np.cos(np.radians(t1))*np.cos(np.radians(t2+t3))+a2*np.cos(np.radians(t1))*np.cos(np.radians(t2))+a1*np.cos(np.radians(t1))+d4*np.sin(np.radians(t1))+b1*np.sin(np.radians(t1))
+    y = a4*np.sin(np.radians(t1))*np.cos(np.radians(t2+t3+t4))+a3*np.sin(np.radians(t1))*np.cos(np.radians(t2+t3))+a2*np.sin(np.radians(t1))*np.cos(np.radians(t2))+a1*np.sin(np.radians(t1))-d4*np.cos(np.radians(t1))-b1*np.cos(np.radians(t1))
+    z = a4*np.sin(np.radians(t2+t3+t4))+a3*np.sin(np.radians(t2+t3))+a2*np.sin(np.radians(t2))
+    beta = 90
+    alpha = np.rad2deg(np.arctan2(-np.cos(np.radians(t1)), np.sin(np.radians(t1))))
+    gamma = np.rad2deg(np.arctan2(np.cos(np.radians(t2+t3+t4)), -np.sin(np.radians(t2+t3+t4))))
+    position = [x, y, z]
+    rotation = [alpha, beta, gamma]
+    return position, rotation
+
+
+def cos2ndraw2(angle_a, side_b, side_c):
+    side_a = np.sqrt(side_b ** 2 + side_c ** 2 - 2 * side_b * side_c * np.cos(np.radians(angle_a)))
+    return side_a
+
+
+def cos2ndraw(side_a, side_b, side_c):
+    A_angle = np.arccos((side_b ** 2 + side_c ** 2 - side_a ** 2) / (2 * side_b * side_c))
+    A_angle = np.degrees(A_angle)  # convert to degrees
+    return A_angle
+
