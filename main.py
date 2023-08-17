@@ -55,10 +55,10 @@ bucket_4_link_angle = 0.0
 cal_bucket = 0.0
 cal_bucket_prv = 0.0
 cal_bucket_result = 0.0
-angle_sensor_offset = np.array([268.5, 265.6, 386.9, 0], dtype=np.float64)  # offset angle of boom, arm, bucket and body
+angle_sensor_offset = np.array([268.5, 265.6, 386.9, 270], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 
 angle_sensor_offset.flags.writeable = False
-relative_angle = np.zeros(shape=2, dtype=np.float64)  # arm relative, bucket relative
+relative_angle = np.zeros(shape=3, dtype=np.float64)  # relative angle of boom, arm, bucket
 excavator_pos = np.zeros(shape=3, dtype=np.float64)  # latitude, longitude, heading
 
 logging_data: pd.DataFrame = pd.DataFrame()
@@ -243,9 +243,21 @@ while True:
                                                 gps_y_1=gps_coords_tm[0], gps_y_2=gps_coords_tm[2]))
 
     # read value and execution offset and execution low pass filter of angle sensor
-    for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor, body_sensor]):
-        excavator_angle[i] = np.subtract(angle_sensor_name.read_sensor_value('y_axis'), angle_sensor_offset[i])
+    for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor]):
+        excavator_angle[i] = angle_sensor_name.read_sensor_value('y_axis')
+
+    excavator_angle[3] = body_sensor.read_sensor_value('x_axis')
+
+    for i, angle in enumerate(excavator_angle):
+        excavator_angle[i] = np.subtract(angle, angle_sensor_offset[i])
+
+    excavator_angle[3] = np.negative(excavator_angle[3])
+
+    for i in range(len(excavator_angle)):
         pred_angle[i] = np.add(np.multiply(0.5, pred_angle[i]), np.multiply(0.5, excavator_angle[i]))
+
+    # calculate relative angle
+    relative_angle[0] = pred_angle[0]-pred_angle[3]
 
     # bucket offset
     if pred_angle[2] < -200:
@@ -284,10 +296,12 @@ while True:
                                                                    work_time_threshold=3)
 
     # estimation of bucket position
-    bucket_local_pos[1], bucket_local_pos[2], relative_angle[0], relative_angle[1] = \
+    bucket_local_pos[1], bucket_local_pos[2], relative_angle[1], relative_angle[2] = \
         end_point_kinematics_abs(pred_angle[0], pred_angle[1], bucket_4_link_angle)
 
-    x, y, z = fwd_kin_30_fun(swing_angle=0, boom_angle=pred_angle[0], arm_angle=pred_angle[1], bucket_angle=pred_angle[2])
+    bucket_pos_1 = fwd_kin_30_fun(t1=0, t2=pred_angle[0], t3=pred_angle[1], t4=0)
+    # print('v', bucket_pos_1)
+    # print(pred_angle[0], pred_angle[1], pred_angle[2])
 
     bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
                                                                        y_distance=bucket_local_pos[1],
@@ -382,7 +396,8 @@ while True:
     # print(bucket_local_pos)
     # print(safety_control_msg.read_variable('work_limit'))
     # print(excavator_pos[2])
-    # print(pred_angle)
+    print(pred_angle)
+    print(relative_angle)
     # print(relative_angle, bucket_4_link_angle, (bucket_4_link_angle*1.8)+162)
     # print(bucket_4_link_angle)
     # print(joystick_pos)
@@ -391,5 +406,5 @@ while True:
     # print('bucket in range', bucket_in_range)
     # print(safety_state)
     # print(work_limit_state, pipe_rela_dist)
-    print(excavator_work_state)
+    # print(excavator_work_state)
     time.sleep(0.1)
