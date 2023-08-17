@@ -4,7 +4,7 @@ import pandas as pd
 from utils.accessory_lib import system_info
 from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
-from utils.end_point_kinematics import end_point_kinematics_abs, link_calculator
+from utils.end_point_kinematics import end_point_kinematics_abs, link_calculator, fwd_kin_30_fun
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
 from utils.warning_target import get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth, \
     get_target_boundary, recognition_in_range_boundary
@@ -286,6 +286,8 @@ while True:
     # estimation of bucket position
     bucket_local_pos[1], bucket_local_pos[2], relative_angle[0], relative_angle[1] = \
         end_point_kinematics_abs(pred_angle[0], pred_angle[1], bucket_4_link_angle)
+
+    x, y, z = fwd_kin_30_fun(swing_angle=0, boom_angle=pred_angle[0], arm_angle=pred_angle[1], bucket_angle=pred_angle[2])
 
     bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
                                                                        y_distance=bucket_local_pos[1],
