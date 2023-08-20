@@ -27,11 +27,11 @@ class SafetyControlMsgParser:
         self.__cd_query: str = 'none'
         self.__n_of_under_utils: int = 0
         self.__equipment_raw_pos: np.ndarray = np.zeros(shape=4, dtype=np.uint32)  # gps_1_y, gps_1_x, gps_2_y, gps_2_x
-        self.__equipment_cal_pos: np.ndarray = np.zeros(shape=4, dtype=np.double)
-        self.__equipment_origin_pos: np.ndarray = np.zeros(shape=2, dtype=np.double)  # longitude, latitude, heading
-        self.__equipment_altitude: np.ndarray = np.zeros(shape=2, dtype=np.double)  # gps_1_altitude, gps_2_altitude
+        self.__equipment_cal_pos: np.ndarray = np.zeros(shape=4, dtype=np.float64)
+        self.__equipment_origin_pos: np.ndarray = np.zeros(shape=2, dtype=np.float64)  # longitude, latitude, heading
+        self.__equipment_altitude: np.ndarray = np.zeros(shape=2, dtype=np.float64)  # gps_1_altitude, gps_2_altitude
         self.__bucket_position_data: [int] = [0] * 3  # x_pos, y_pos, z_pos
-        self.__compensation_angle_data = np.zeros(shape=3, dtype=np.double)
+        self.__compensation_angle_data = np.zeros(shape=3, dtype=np.float64)
         self.__class__.get_under_utils_data.called = False
         self.__t0: Final[float] = time.time()
 
@@ -148,6 +148,11 @@ class SafetyControlMsgParser:
         payload = bytes(0)
 
         for comp_angle in self.__compensation_angle_data:
+            if comp_angle >= 360:
+                comp_angle = 360
+            elif comp_angle <= -360:
+                comp_angle = -360
+
             comp_angle = (comp_angle*10)+3600
             payload += int(comp_angle).to_bytes(length=2, byteorder='little')
 

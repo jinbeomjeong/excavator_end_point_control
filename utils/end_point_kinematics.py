@@ -39,7 +39,7 @@ def end_point_kinematics_abs(boom_angle: float, arm_angle: float, bucket_angle: 
     z_pos_bucket = bucket_length * np.sin(np.deg2rad(bucket_angle))
     z_pos = z_pos_boom + z_pos_arm + z_pos_bucket + height
 
-    return x_pos, z_pos, arm_relative_angle, bucket_relative_angle
+    return x_pos, z_pos
 
 
 theta4_1: float = 0

@@ -1,4 +1,4 @@
-import time, threading, can, argparse
+import time, threading, can, argparse, functools
 import numpy as np
 import pandas as pd
 from utils.accessory_lib import system_info
@@ -31,7 +31,7 @@ safety_control_msg = SafetyControlMsgParser()
 
 # initialize internal variable
 msg_set_ic, msg_set_cd = [], []
-control_state, safety_state, bucket_in_range, pipe_rela_dist = 0, 0, 0, 0
+control_state, safety_state, bucket_in_pipe, pipe_rela_dist = 0, 0, 0, 0
 t0_1: float = 0.0
 ic_state, cd_state, sc_state = 0, 0, 0
 target_pipe_depth: int = 500
@@ -50,7 +50,8 @@ bucket_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
 # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
 joystick_pos = np.zeros(shape=4, dtype=np.uint8)
-excavator_angle, pred_angle = np.zeros(shape=4, dtype=np.float64), np.zeros(4, dtype=np.float64)  # boom, arm and bucket angle
+excavator_angle = np.zeros(shape=4, dtype=np.float64)
+comp_angle = np.zeros(shape=4, dtype=np.float64)  # boom, arm and bucket angle
 bucket_4_link_angle = 0.0
 cal_bucket = 0.0
 cal_bucket_prv = 0.0
@@ -59,6 +60,7 @@ angle_sensor_offset = np.array([268.5, 265.6, 386.9, 270], dtype=np.float64)  # 
 
 angle_sensor_offset.flags.writeable = False
 relative_angle = np.zeros(shape=3, dtype=np.float64)  # relative angle of boom, arm, bucket
+relative_angle_filtered = np.zeros(shape=3, dtype=np.float64)
 excavator_pos = np.zeros(shape=3, dtype=np.float64)  # latitude, longitude, heading
 
 logging_data: pd.DataFrame = pd.DataFrame()
@@ -168,9 +170,9 @@ class Logging:
     def start_logging(self, period=0.1):
         global logging_data
 
-        logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(pred_angle[0], 2),
-                                     '3': round(pred_angle[1], 2), '4': round(pred_angle[2], 2),
-                                     '5': round(pred_angle[3], 2), '6': relative_angle[0], '7': relative_angle[1],
+        logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(excavator_angle[0], 2),
+                                     '3': round(excavator_angle[1], 2), '4': round(excavator_angle[2], 2),
+                                     '5': round(excavator_angle[3], 2), '6': relative_angle[0], '7': relative_angle[1],
                                      '8': bucket_4_link_angle, '9': joystick_pos[0], '10': joystick_pos[1],
                                      '11': joystick_pos[2], '12': joystick_pos[3], '13': excavator_pos[0],
                                      '14': excavator_pos[1], '15': excavator_pos[2], '16': bucket_global_pos[0],
@@ -208,6 +210,22 @@ if len(args.log_name) > 0:
 if len(args.ip) > 0:
     tcp_task = TcpCom(ip=args.ip)
     tcp_task.send_msg()
+
+
+class SensorFilter:
+    def __init__(self, kernel_size: int):
+        self.__buffer = np.zeros(kernel_size)
+
+    def point_by_median(self, input_value: float) -> float:
+        self.__buffer = np.roll(self.__buffer, shift=1)
+        self.__buffer[0] = input_value
+
+        return np.median(self.__buffer)
+
+
+boom_filter = SensorFilter(kernel_size=9)
+arm_filter = SensorFilter(kernel_size=9)
+bucket_filter = SensorFilter(kernel_size=9)
 
 # set stand-by state change of safety controller
 system_info()
@@ -253,39 +271,47 @@ while True:
 
     excavator_angle[3] = np.negative(excavator_angle[3])
 
-    for i in range(len(excavator_angle)):
-        pred_angle[i] = np.add(np.multiply(0.5, pred_angle[i]), np.multiply(0.5, excavator_angle[i]))
-
     # calculate relative angle
-    relative_angle[0] = pred_angle[0]-pred_angle[3]
+    relative_angle[0] = excavator_angle[0] - excavator_angle[3]
+    relative_angle[1] = excavator_angle[1] - relative_angle[0]
+    relative_angle[2] = excavator_angle[2] - relative_angle[0] - relative_angle[1]
+
+    # calculate low pass filter
+    for i in range(len(excavator_angle[0:3])):
+        relative_angle_filtered[i] = np.add(np.multiply(0.5, relative_angle_filtered[i]),
+                                            np.multiply(0.5, relative_angle[i]))
+
+    # calculate median filter
+    for i, sensor_filter in enumerate([boom_filter, arm_filter, bucket_filter]):
+        comp_angle[i] = sensor_filter.point_by_median(input_value=relative_angle[i])
 
     # bucket offset
-    if pred_angle[2] < -200:
-        cal_bucket = pred_angle[2] + (377.8-38.4)
+    if relative_angle_filtered[2] < -200:
+        cal_bucket = relative_angle_filtered[2] + (377.8-38.4)
     else:
-        cal_bucket = pred_angle[2]
+        cal_bucket = relative_angle_filtered[2]
 
-    # bucket angle filter
-    if np.abs(np.abs(cal_bucket)-np.abs(cal_bucket_prv)) < 5:
-        cal_bucket_result = cal_bucket
-    else:
-        cal_bucket_result = cal_bucket_prv
-
-    if cal_bucket >= 0:
-        cal_bucket_result = 0
-
-    cal_bucket_prv = cal_bucket
+    # # bucket angle filter
+    # if np.abs(np.abs(cal_bucket)-np.abs(cal_bucket_prv)) < 5:
+    #     cal_bucket_result = cal_bucket
+    # else:
+    #     cal_bucket_result = cal_bucket_prv
+    #
+    # if cal_bucket >= 0:
+    #     cal_bucket_result = 0
+    #
+    # cal_bucket_prv = cal_bucket
 
     # calculate bucket 4 link angle
-    bucket_4_link_angle, th2 = link_calculator(cal_bucket_result)
-
+    a, th2 = link_calculator(relative_angle_filtered[2])
+    # print(a)
     # read value of joystick position
     for i, var_name in enumerate(['left_x_position', 'left_y_position', 'right_x_position', 'right_y_position']):
         joystick_pos[i] = joystick_msg.read_joystick_value(var_name)
 
     # recognition of excavator state
-    excavator_work_state[7], excavator_work_state[6] = work_status(boom_angle=pred_angle[0], arm_angle=pred_angle[1],
-                                                                   bucket_angle=pred_angle[2], heading_angle=excavator_pos[2],
+    excavator_work_state[7], excavator_work_state[6] = work_status(boom_angle=comp_angle[0], arm_angle=comp_angle[1],
+                                                                   bucket_angle=comp_angle[2], heading_angle=excavator_pos[2],
                                                                    left_joystick_x_pos=joystick_pos[0],
                                                                    left_joystick_y_pos=joystick_pos[1],
                                                                    right_joystick_x_pos=joystick_pos[2],
@@ -296,10 +322,10 @@ while True:
                                                                    work_time_threshold=3)
 
     # estimation of bucket position
-    bucket_local_pos[1], bucket_local_pos[2], relative_angle[1], relative_angle[2] = \
-        end_point_kinematics_abs(pred_angle[0], pred_angle[1], bucket_4_link_angle)
+    bucket_local_pos[1], bucket_local_pos[2] = end_point_kinematics_abs(relative_angle_filtered[0], relative_angle_filtered[1],
+                                                                        bucket_4_link_angle)
 
-    bucket_pos_1 = fwd_kin_30_fun(t1=0, t2=pred_angle[0], t3=pred_angle[1], t4=0)
+    bucket_pos_1 = fwd_kin_30_fun(t1=0, t2=relative_angle_filtered[0], t3=relative_angle_filtered[1], t4=0)
     # print('v', bucket_pos_1)
     # print(pred_angle[0], pred_angle[1], pred_angle[2])
 
@@ -307,13 +333,11 @@ while True:
                                                                        y_distance=bucket_local_pos[1],
                                                                        heading=excavator_pos[2])
     if pipe_coords_tm.shape[0] > 0:
-        ''''
-        bucket_in_range = recognition_in_range_boundary(input_pos=bucket_global_pos,
+        bucket_in_pipe = recognition_in_range_boundary(input_pos=bucket_global_pos,
                                                         target_pos_max=pipe_boundary_coords_tm[0],
-                                                    target_pos_min=pipe_boundary_coords_tm[1])
-        '''
+                                                        target_pos_min=pipe_boundary_coords_tm[1])
     else:
-        bucket_in_range = 0
+        bucket_in_pipe = 0
 
     # recognition to safety status of bucket position
     if pipe_coords_tm.shape[0] > 0:
@@ -326,23 +350,22 @@ while True:
     work_limit_state = safety_control_msg.read_variable('work_limit')
     # work_limit_state = 'de-active'
 
-    if work_limit_state == 'de-active' or pipe_coords_tm.shape[0] > 0:
-        '''
+    if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0 and bucket_in_pipe:
         target_pipe_depth = est_pipe_depth(target_position=excavator_pos[0:2], pipe_position=pipe_coords_tm,
                                            pipe_depth=np.negative(pipe_depth))
         pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
-        '''
-        pipe_rela_dist = bucket_local_pos[2]
+
+        # pipe_rela_dist = bucket_local_pos[2]
         pipe_rela_dist = np.abs(pipe_rela_dist) if pipe_rela_dist > 0 else 0
         pipe_rela_dist = int(pipe_rela_dist/10)
 
     else:
-        target_pipe_depth = 500  # surface distance
+        target_pipe_depth = 700  # surface distance
         pipe_rela_dist = 9999  # invalid pipe relative distance
 
     # safety control of bucket position
     if control_state == 0:
-        control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2], time_offset=1,
+        control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2], time_offset=3,
                                                                threshold_signal=target_pipe_depth)
 
         t0_1 = time.time()
@@ -362,15 +385,22 @@ while True:
     else:
         safety_state = 0
 
+    rela_dist_state = 0
+
+    if pipe_rela_dist >= 0:
+        rela_dist_state = 0
+    else:
+        rela_dist_state =1
+
     # create and send message of safety controller
     sc_state_msg = safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
                                                           excavator_state=np.packbits(excavator_work_state)[0])
     msg_set_ic.append(sc_state_msg)
     msg_set_ic.append(safety_control_msg.create_equip_origin_pos_msg(latitude=excavator_pos[0], longitude=excavator_pos[1]))
     msg_set_ic.append(safety_control_msg.create_equip_heading_msg(heading=excavator_pos[2]))
-    msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=pred_angle[0], arm_angle=relative_angle[0],
-                                                               bucket_angle=(bucket_4_link_angle*1.8)+162))
-    msg_set_ic.append(safety_control_msg.create_target_relative_distance_msg(state=1, distance=pipe_rela_dist))
+    msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=comp_angle[0], arm_angle=comp_angle[1],
+                                                               bucket_angle=comp_angle[2]))
+    msg_set_ic.append(safety_control_msg.create_target_relative_distance_msg(state=rela_dist_state, distance=pipe_rela_dist))
     msg_set_ic.append(safety_control_msg.create_cd_state_msg(state=cd_state,
                                                              work_limit=0 if work_limit_state == 'de-active' else 1))
 
@@ -389,15 +419,15 @@ while True:
 
     for i, data in enumerate([excavator_pos[0], excavator_pos[1], excavator_pos[2],
                               bucket_global_pos[0], bucket_global_pos[1], target_pipe_depth, bucket_local_pos[1],
-                              bucket_local_pos[2], pred_angle[0], pred_angle[1], pred_angle[2],
-                              safety_state, np.packbits(excavator_work_state)[0], bucket_in_range]):
+                              bucket_local_pos[2], relative_angle_filtered[0], relative_angle_filtered[1],
+                              relative_angle_filtered[2], safety_state, np.packbits(excavator_work_state)[0], bucket_in_pipe]):
         tcp_msg[i] = data
 
     # print(bucket_local_pos)
     # print(safety_control_msg.read_variable('work_limit'))
-    # print(excavator_pos[2])
-    print(pred_angle)
-    print(relative_angle)
+    # print(excavator_angle)
+    # print(relative_angle_filtered)
+    # print(relative_angle)
     # print(relative_angle, bucket_4_link_angle, (bucket_4_link_angle*1.8)+162)
     # print(bucket_4_link_angle)
     # print(joystick_pos)
