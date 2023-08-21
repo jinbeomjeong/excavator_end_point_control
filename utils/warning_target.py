@@ -26,11 +26,12 @@ def interp_2d_target(target_pos: np.ndarray, step) -> np.ndarray:  # target_pos:
     return target_interp_pos
 
 
-def est_pipe_depth(target_position: np.ndarray, pipe_position: np.ndarray, pipe_depth: np.ndarray) -> float:
+def est_pipe_depth(target_position: np.ndarray, pipe_position: np.ndarray, pipe_depth: np.ndarray,
+                   safety_length: float = 1.0) -> float:
     for i, pos in enumerate(target_position):
-        est_depth[i] = np.interp(x=pos, xp=pipe_position[:, i], fp=pipe_depth)
+        est_depth[i] = (np.interp(x=pos, xp=pipe_position[:, i], fp=pipe_depth))+safety_length
 
-    return np.multiply(np.min(est_depth), 1000)
+    return np.multiply(np.max(est_depth), 1000)
 
 
 def get_target_boundary(target_pos: np.ndarray, radius: np.ndarray, step: int = 10) -> np.ndarray:

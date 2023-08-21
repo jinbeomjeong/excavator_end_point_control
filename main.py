@@ -34,16 +34,19 @@ msg_set_ic, msg_set_cd = [], []
 control_state, safety_state, bucket_in_pipe, pipe_rela_dist = 0, 0, 0, 0
 t0_1: float = 0.0
 ic_state, cd_state, sc_state = 0, 0, 0
-target_pipe_depth: int = 500
+target_pipe_depth: int = 700
 excavator_work_state = np.zeros(shape=8, dtype=np.uint8)  # 1byte position: movement, 2byte position: work status
 cd_query = 'none'
 receive_state, done_state = True, True
 
 pipe_coords, pipe_coords_tm = np.array([]), np.array([])
-pipe_coords_tm_interp, pipe_boundary_coords_tm = np.array([]), np.array([])
+pipe_coords_tm_interp = np.array([])
+pipe_boundary_coords_tm = np.array([])
+pipe_safety_boundary_coords_tm = np.array([])
 pipe_depth, pipe_diameter = np.array([]), np.array([])
 
-gps_coords, gps_coords_tm = np.zeros(shape=4, dtype=np.float64), np.zeros(4, dtype=np.float64)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
+gps_coords = np.zeros(shape=4, dtype=np.float64)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
+gps_coords_tm = np.zeros(shape=4, dtype=np.float64)  # converted from gps_coords
 bucket_local_pos = np.zeros(shape=3, dtype=np.float64)  # x-axis, y-axis, z-axis
 bucket_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
 
@@ -83,7 +86,7 @@ def can_com_ic_controller():
 
 def can_com_cd_controller():
     global cd_query, receive_state, done_state, pipe_coords, pipe_depth, pipe_coords_tm, pipe_coords_tm_interp, \
-        pipe_diameter, pipe_boundary_coords_tm
+        pipe_diameter, pipe_boundary_coords_tm, pipe_safety_boundary_coords_tm
 
     for can_msg in can_channel_cd:
         safety_control_msg.get_cd_state(packet=can_msg)
@@ -114,25 +117,27 @@ def can_com_cd_controller():
 
                 pipe_coords_tm_interp = interp_2d_target(pipe_coords_tm, step=10)
                 pipe_boundary_coords_tm = get_target_boundary(pipe_coords_tm, radius=pipe_diameter/2, step=10)
+                safety_length = np.ones(shape=len(pipe_diameter))+(pipe_diameter/2)
+                pipe_safety_boundary_coords_tm = get_target_boundary(pipe_coords_tm, radius=safety_length, step=10)
                 print(safety_control_msg.read_variable('cd_query'))
                 receive_state = True
                 done_state = False
 
 
-def can_com_ic_send():
-    global msg_set_ic
-
-    while True:
-        msg_set_ic.append(safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
-                                                                 excavator_state=np.packbits(excavator_work_state)[0]))
-        msg_set_ic.append(safety_control_msg.create_equip_origin_pos_msg(latitude=excavator_pos[0], longitude=excavator_pos[1]))
-        msg_set_ic.append(safety_control_msg.create_equip_heading_msg(heading=excavator_pos[2]))
-        msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=pred_angle[0], arm_angle=relative_angle[0],
-                                                                   bucket_angle=relative_angle[1]))
-        for msg_ic in msg_set_ic:
-            can_channel_ic.send(msg_ic)
-
-        msg_set_ic = []
+# def can_com_ic_send():
+#     global msg_set_ic
+#
+#     while True:
+#         msg_set_ic.append(safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
+#                                                                  excavator_state=np.packbits(excavator_work_state)[0]))
+#         msg_set_ic.append(safety_control_msg.create_equip_origin_pos_msg(latitude=excavator_pos[0], longitude=excavator_pos[1]))
+#         msg_set_ic.append(safety_control_msg.create_equip_heading_msg(heading=excavator_pos[2]))
+#         msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=comp_angle[0], arm_angle=comp_angle[1],
+#                                                                    bucket_angle=comp_angle[2]))
+#         for msg_ic in msg_set_ic:
+#             can_channel_ic.send(msg_ic)
+#
+#         msg_set_ic = []
 
 
 class TcpCom:
@@ -286,10 +291,10 @@ while True:
         comp_angle[i] = sensor_filter.point_by_median(input_value=relative_angle[i])
 
     # bucket offset
-    if relative_angle_filtered[2] < -200:
-        cal_bucket = relative_angle_filtered[2] + (377.8-38.4)
-    else:
-        cal_bucket = relative_angle_filtered[2]
+    # if relative_angle_filtered[2] < -200:
+    #     cal_bucket = relative_angle_filtered[2] + (377.8-38.4)
+    # else:
+    #     cal_bucket = relative_angle_filtered[2]
 
     # # bucket angle filter
     # if np.abs(np.abs(cal_bucket)-np.abs(cal_bucket_prv)) < 5:
@@ -334,8 +339,8 @@ while True:
                                                                        heading=excavator_pos[2])
     if pipe_coords_tm.shape[0] > 0:
         bucket_in_pipe = recognition_in_range_boundary(input_pos=bucket_global_pos,
-                                                        target_pos_max=pipe_boundary_coords_tm[0],
-                                                        target_pos_min=pipe_boundary_coords_tm[1])
+                                                       target_pos_max=pipe_safety_boundary_coords_tm[0],
+                                                       target_pos_min=pipe_safety_boundary_coords_tm[1])
     else:
         bucket_in_pipe = 0
 
@@ -350,14 +355,17 @@ while True:
     work_limit_state = safety_control_msg.read_variable('work_limit')
     # work_limit_state = 'de-active'
 
-    if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0 and bucket_in_pipe:
-        target_pipe_depth = est_pipe_depth(target_position=excavator_pos[0:2], pipe_position=pipe_coords_tm,
-                                           pipe_depth=np.negative(pipe_depth))
-        pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
+    if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0:
+        target_pipe_depth = est_pipe_depth(target_position=bucket_global_pos, pipe_position=pipe_coords_tm,
+                                           pipe_depth=np.negative(pipe_depth), safety_length=1.0)
+        if bucket_in_pipe:
+            pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
+            pipe_rela_dist = np.abs(pipe_rela_dist)
+            pipe_rela_dist = int(pipe_rela_dist / 10)
 
-        # pipe_rela_dist = bucket_local_pos[2]
-        pipe_rela_dist = np.abs(pipe_rela_dist) if pipe_rela_dist > 0 else 0
-        pipe_rela_dist = int(pipe_rela_dist/10)
+        else:
+            target_pipe_depth = -9999
+            pipe_rela_dist = 9999
 
     else:
         target_pipe_depth = 700  # surface distance
@@ -437,4 +445,5 @@ while True:
     # print(safety_state)
     # print(work_limit_state, pipe_rela_dist)
     # print(excavator_work_state)
+    # print(bucket_global_pos)
     time.sleep(0.1)
