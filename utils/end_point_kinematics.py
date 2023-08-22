@@ -54,22 +54,45 @@ def link_calculator(theta2):
 
 
 angle_t1 = 0
+filtered_angle = 0
+filtered_angle_t1 = 0
+derivative_filtered_angle = 0
 converted_angle = 0
+detect_down_for_end_of_coord = False
+detect_down_for_end_of_coord_t1 = False
+first_call_flag = True
 
 
 def convert_bucket_angle(angle: float) -> float:
-    global angle_t1, converted_angle
+    global angle_t1, filtered_angle, filtered_angle_t1, derivative_filtered_angle, detect_down_for_end_of_coord,\
+        converted_angle, first_call_flag
 
-    if (270 <= angle <= 360) and (270 <= angle_t1 <= 360) and (angle-angle_t1 <= -20):
-        converted_angle = angle+360
-
-    else:
+    if first_call_flag:
+        angle_t1 = angle
+        filtered_angle_t1 = angle
         converted_angle = angle
 
-    if (0 <= angle <= 90) and (0 <= angle_t1 <= 90) and (angle-angle_t1 <= 20):
-        converted_angle = angle-360
+    else:
+        if np.abs(angle-angle_t1) > 15:
+            filtered_angle = filtered_angle_t1
+        else:
+            filtered_angle = angle
+
+        derivative_filtered_angle = filtered_angle - filtered_angle_t1
+
+        # angle value decrease is bucket down
+        # derivative_filtered_angle over 300 is bucket down of out of range
+        detect_down_for_end_of_coord = ((detect_down_for_end_of_coord or derivative_filtered_angle >= 300)
+                                        and not(-400 <= derivative_filtered_angle <= -200))
+
+        if detect_down_for_end_of_coord:
+            converted_angle = filtered_angle-360
+        else:
+            converted_angle = filtered_angle
 
     angle_t1 = angle
+    filtered_angle_t1 = filtered_angle
+    first_call_flag = False
 
     return converted_angle
 

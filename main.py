@@ -4,7 +4,7 @@ import pandas as pd
 from utils.accessory_lib import system_info
 from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
-from utils.end_point_kinematics import end_point_kinematics, link_calculator, fwd_kin_30_fun
+from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
 from utils.warning_target import get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth, \
     get_target_boundary, recognition_in_range_boundary
@@ -226,6 +226,7 @@ while True:
     for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor]):
         excavator_angle[i] = angle_sensor_name.read_sensor_value('y_axis')
 
+    excavator_angle[2] = convert_bucket_angle(excavator_angle[2])
     excavator_angle[3] = body_sensor.read_sensor_value('x_axis')
 
     # offset of angle value
@@ -248,25 +249,8 @@ while True:
     for i, sensor_filter in enumerate([boom_filter, arm_filter, bucket_filter]):
         comp_angle[i] = sensor_filter.point_by_median(input_value=relative_angle[i])
 
-    # bucket offset
-    # if relative_angle_filtered[2] < -200:
-    #     cal_bucket = relative_angle_filtered[2] + (377.8-38.4)
-    # else:
-    #     cal_bucket = relative_angle_filtered[2]
-
-    # # bucket angle filter
-    # if np.abs(np.abs(cal_bucket)-np.abs(cal_bucket_prv)) < 5:
-    #     cal_bucket_result = cal_bucket
-    # else:
-    #     cal_bucket_result = cal_bucket_prv
-    #
-    # if cal_bucket >= 0:
-    #     cal_bucket_result = 0
-    #
-    # cal_bucket_prv = cal_bucket
-
     # calculate bucket 4 link angle
-    a, th2 = link_calculator(relative_angle_filtered[2])
+    bucket_4_link_angle, th2 = link_calculator(relative_angle_filtered[2])
 
     # read value of joystick position
     for i, var_name in enumerate(['left_x_position', 'left_y_position', 'right_x_position', 'right_y_position']):
@@ -287,8 +271,6 @@ while True:
     # estimation of bucket position
     bucket_local_pos[1], bucket_local_pos[2] = end_point_kinematics(relative_angle_filtered[0], relative_angle_filtered[1],
                                                                     bucket_4_link_angle)
-
-    bucket_pos_1 = fwd_kin_30_fun(t1=0, t2=relative_angle_filtered[0], t3=relative_angle_filtered[1], t4=0)
 
     bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
                                                                        y_distance=bucket_local_pos[1],
@@ -313,6 +295,7 @@ while True:
     if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0:
         target_pipe_depth = est_pipe_depth(target_position=bucket_global_pos, pipe_position=pipe_coords_tm,
                                            pipe_depth=np.negative(pipe_depth), safety_length=1.0)
+
         if bucket_in_pipe:
             pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
             pipe_rela_dist = np.abs(pipe_rela_dist)
@@ -353,7 +336,7 @@ while True:
     if pipe_rela_dist >= 0:
         rela_dist_state = 0
     else:
-        rela_dist_state =1
+        rela_dist_state = 1
 
     # create and send message of safety controller
     sc_state_msg = safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
@@ -399,19 +382,4 @@ while True:
                                  '27': gps_coords_tm[1], '28': gps_coords_tm[2], '29': gps_coords_tm[3]}, index=[0])
 
     logging_data.to_csv(logging_file_path, mode='a', header=False)
-    # print(bucket_local_pos)
-    # print(safety_control_msg.read_variable('work_limit'))
-    # print(excavator_angle)
-    # print(relative_angle_filtered)
-    # print(relative_angle)
-    # print(relative_angle, bucket_4_link_angle, (bucket_4_link_angle*1.8)+162)
-    # print(bucket_4_link_angle)
-    # print(joystick_pos)
-    # print(np.packbits(excavator_work_state)[0])
-    # print('n of pipe data', pipe_coords.shape[0])
-    # print('bucket in range', bucket_in_range)
-    # print(safety_state)
-    # print(work_limit_state, pipe_rela_dist)
-    # print(excavator_work_state)
-    # print(bucket_global_pos)
     time.sleep(0.1)
