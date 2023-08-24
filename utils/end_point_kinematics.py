@@ -64,41 +64,7 @@ first_call_flag = True
 
 
 def convert_bucket_angle(angle: float) -> float:
-    return np.rad2deg(np.sin(np.deg2rad(angle)))
-
-
-def convert_bucket_angle_2(angle: float) -> float:
-    global angle_t1, filtered_angle, filtered_angle_t1, derivative_filtered_angle, detect_down_for_end_of_coord,\
-        converted_angle, first_call_flag
-
-    if first_call_flag:
-        angle_t1 = angle
-        filtered_angle_t1 = angle
-        converted_angle = angle
-
-    else:
-        if np.abs(angle-angle_t1) > 15:
-            filtered_angle = filtered_angle_t1
-        else:
-            filtered_angle = angle
-
-        derivative_filtered_angle = filtered_angle - filtered_angle_t1
-
-        # angle value decrease is bucket down
-        # derivative_filtered_angle over 300 is bucket down of out of range
-        detect_down_for_end_of_coord = ((detect_down_for_end_of_coord or derivative_filtered_angle >= 300)
-                                        and not(-400 <= derivative_filtered_angle <= -200))
-
-        if detect_down_for_end_of_coord:
-            converted_angle = filtered_angle-360
-        else:
-            converted_angle = filtered_angle
-
-    angle_t1 = angle
-    filtered_angle_t1 = filtered_angle
-    first_call_flag = False
-
-    return converted_angle
+    return np.rad2deg(np.arcsin(np.sin(np.deg2rad(angle))))
 
 
 def fcn_1(body_t, boom_t, arm_t):
