@@ -61,8 +61,7 @@ cal_bucket = 0.0
 cal_bucket_prv = 0.0
 cal_bucket_result = 0.0
 
-# angle_sensor_offset = np.array([268.5, 265.6, 386.9, 270], dtype=np.float64)  # offset angle of boom, arm, bucket and body
-angle_sensor_offset = np.array([268.5, 265.6, 0, 270], dtype=np.float64)  # offset angle of boom, arm, bucket and body
+angle_sensor_offset = np.array([268.5, 265.6, 20.0, 270], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 angle_sensor_offset.flags.writeable = False
 relative_angle = np.zeros(shape=3, dtype=np.float64)  # relative angle of boom, arm, bucket
 relative_angle_filtered = np.zeros(shape=3, dtype=np.float64)
@@ -227,6 +226,7 @@ while True:
         excavator_angle[i] = angle_sensor_name.read_sensor_value('y_axis')
 
     excavator_angle[2] = convert_bucket_angle(excavator_angle[2])
+    excavator_angle[2] = excavator_angle[2]%360
     excavator_angle[3] = body_sensor.read_sensor_value('x_axis')
 
     # offset of angle value
@@ -270,7 +270,7 @@ while True:
 
     # estimation of bucket position
     bucket_local_pos[1], bucket_local_pos[2] = end_point_kinematics(relative_angle_filtered[0], relative_angle_filtered[1],
-                                                                    bucket_4_link_angle)
+                                                                    relative_angle_filtered[2])
 
     bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
                                                                        y_distance=bucket_local_pos[1],
