@@ -64,6 +64,10 @@ first_call_flag = True
 
 
 def convert_bucket_angle(angle: float) -> float:
+    return np.rad2deg(np.sin(np.deg2rad(angle)))
+
+
+def convert_bucket_angle_2(angle: float) -> float:
     global angle_t1, filtered_angle, filtered_angle_t1, derivative_filtered_angle, detect_down_for_end_of_coord,\
         converted_angle, first_call_flag
 

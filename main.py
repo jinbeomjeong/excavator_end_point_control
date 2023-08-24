@@ -226,7 +226,6 @@ while True:
         excavator_angle[i] = angle_sensor_name.read_sensor_value('y_axis')
 
     excavator_angle[2] = convert_bucket_angle(excavator_angle[2])
-    excavator_angle[2] = excavator_angle[2]%360
     excavator_angle[3] = body_sensor.read_sensor_value('x_axis')
 
     # offset of angle value
