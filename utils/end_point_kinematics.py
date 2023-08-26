@@ -8,7 +8,7 @@ bucket_length = 1260  # unit: mm
 height = 1700  # unit: mm
 
 
-def end_point_kinematics(boom_angle: float, arm_angle: float, bucket_angle: float):
+def end_point_kinematics(boom_angle, arm_angle, bucket_angle):
     x_pos_boom = boom_length * np.cos(np.deg2rad(boom_angle))
     x_pos_arm = arm_length * np.cos(np.deg2rad(arm_angle))
     x_pos_bucket = bucket_length * np.cos(np.deg2rad(bucket_angle))
@@ -18,7 +18,6 @@ def end_point_kinematics(boom_angle: float, arm_angle: float, bucket_angle: floa
     z_pos_arm = arm_length * np.sin(np.deg2rad(arm_angle))
     z_pos_bucket = bucket_length * np.sin(np.deg2rad(bucket_angle))
     z_pos = z_pos_boom + z_pos_arm + z_pos_bucket + height
-
     return x_pos, z_pos
 
 
@@ -54,18 +53,24 @@ def link_calculator(theta2):
 
 
 angle_t1 = 0
-filtered_angle = 0
-filtered_angle_t1 = 0
-derivative_filtered_angle = 0
-converted_angle = 0
-detect_down_for_end_of_coord = False
-detect_down_for_end_of_coord_t1 = False
-first_call_flag = True
+result_angle = 0
 
 
-def convert_bucket_angle(angle: float) -> float:
+def convert_bucket_angle(angle) -> float:
     return np.rad2deg(np.arcsin(np.sin(np.deg2rad(angle))))
 
+
+def angle_suppression_filter(angle) -> float:
+    global angle_t1, result_angle
+
+    if np.abs(angle-angle_t1) > 20:
+        result_angle = angle_t1
+    else:
+        result_angle = angle
+
+    angle_t1 = angle
+
+    return result_angle
 
 def fcn_1(body_t, boom_t, arm_t):
     theta_BS_offset = -14.28

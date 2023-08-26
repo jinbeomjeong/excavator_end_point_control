@@ -4,7 +4,7 @@ import pandas as pd
 from utils.accessory_lib import system_info
 from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
-from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, link_calculator
+from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, link_calculator, angle_suppression_filter
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
 from utils.warning_target import get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth, \
     get_target_boundary, recognition_in_range_boundary
@@ -65,6 +65,7 @@ angle_sensor_offset = np.array([268.5, 265.6, 20.0, 270], dtype=np.float64)  # o
 angle_sensor_offset.flags.writeable = False
 relative_angle = np.zeros(shape=3, dtype=np.float64)  # relative angle of boom, arm, bucket
 relative_angle_filtered = np.zeros(shape=3, dtype=np.float64)
+absolute_angle_filtered = np.zeros(shape=3, dtype=np.float64)
 excavator_pos = np.zeros(shape=3, dtype=np.float64)  # latitude, longitude, heading
 
 elapsed_time: float = 0.0
@@ -225,24 +226,31 @@ while True:
     for i, angle_sensor_name in enumerate([boom_sensor, arm_sensor, bucket_sensor]):
         excavator_angle[i] = angle_sensor_name.read_sensor_value('y_axis')
 
-    excavator_angle[2] = convert_bucket_angle(excavator_angle[2])
     excavator_angle[3] = body_sensor.read_sensor_value('x_axis')
 
-    # offset of angle value
-    for i, angle in enumerate(excavator_angle):
-        excavator_angle[i] = np.subtract(angle, angle_sensor_offset[i])
-
+    # offset of body angle value
+    excavator_angle[3] = excavator_angle[3] - angle_sensor_offset[3]
     excavator_angle[3] = np.negative(excavator_angle[3])
 
     # calculate relative angle
-    relative_angle[0] = excavator_angle[0] - excavator_angle[3]
-    relative_angle[1] = excavator_angle[1] - relative_angle[0]
+    relative_angle[0] = excavator_angle[0] - angle_sensor_offset[0] - excavator_angle[3]
+    relative_angle[1] = excavator_angle[1] - angle_sensor_offset[1] - relative_angle[0]
     relative_angle[2] = excavator_angle[2] - relative_angle[0] - relative_angle[1]
+    relative_angle[2] = convert_bucket_angle(relative_angle[2])
+    relative_angle[2] = relative_angle[2] - angle_sensor_offset[2]
+
+    # execute suppression angle
+    # relative_angle[2] = angle_suppression_filter(relative_angle[2])
 
     # calculate low pass filter
     for i in range(len(excavator_angle[0:3])):
         relative_angle_filtered[i] = np.add(np.multiply(0.5, relative_angle_filtered[i]),
                                             np.multiply(0.5, relative_angle[i]))
+
+    # calculate absolute angle
+    absolute_angle_filtered[0] = relative_angle_filtered[0]
+    absolute_angle_filtered[1] = relative_angle_filtered[0] + relative_angle_filtered[1]
+    absolute_angle_filtered[2] = relative_angle_filtered[0] + relative_angle_filtered[1] + relative_angle_filtered[2]
 
     # calculate median filter
     for i, sensor_filter in enumerate([boom_filter, arm_filter, bucket_filter]):
@@ -268,8 +276,9 @@ while True:
                                                                    work_time_threshold=3)
 
     # estimation of bucket position
-    bucket_local_pos[1], bucket_local_pos[2] = end_point_kinematics(relative_angle_filtered[0], relative_angle_filtered[1],
-                                                                    relative_angle_filtered[2])
+    bucket_local_pos[1], bucket_local_pos[2] = end_point_kinematics(boom_angle=absolute_angle_filtered[0],
+                                                                    arm_angle=absolute_angle_filtered[1],
+                                                                    bucket_angle=absolute_angle_filtered[2])
 
     bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
                                                                        y_distance=bucket_local_pos[1],
