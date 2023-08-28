@@ -4,7 +4,7 @@ import pandas as pd
 from utils.accessory_lib import system_info
 from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
-from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, link_calculator, angle_suppression_filter
+from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
 from utils.warning_target import get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth, \
     get_target_boundary, recognition_in_range_boundary
@@ -61,7 +61,8 @@ cal_bucket = 0.0
 cal_bucket_prv = 0.0
 cal_bucket_result = 0.0
 
-angle_sensor_offset = np.array([268.5, 265.6, 23.0, 270.5], dtype=np.float64)  # offset angle of boom, arm, bucket and body
+# angle_sensor_offset = np.array([268.5, 265.6, 23.0, 270.5], dtype=np.float64)  # offset angle of boom, arm, bucket and body
+angle_sensor_offset = np.array([268.5, 265.6, -85.0, 270.5], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 angle_sensor_offset.flags.writeable = False
 relative_angle = np.zeros(shape=3, dtype=np.float64)  # relative angle of boom, arm, bucket
 relative_angle_filtered = np.zeros(shape=3, dtype=np.float64)
@@ -259,7 +260,7 @@ while True:
         comp_angle[i] = sensor_filter.point_by_median(input_value=relative_angle[i])
 
     # calculate bucket 4 link angle
-    bucket_4_link_angle, th2 = link_calculator(relative_angle_filtered[2])
+    bucket_4_link_angle = link_calculator(relative_angle_filtered[2])
 
     # read value of joystick position
     for i, var_name in enumerate(['left_x_position', 'left_y_position', 'right_x_position', 'right_y_position']):
@@ -319,6 +320,7 @@ while True:
         target_pipe_depth = 500  # surface distance
         pipe_rela_dist = 9999  # invalid pipe relative distance
 
+
     # safety control of bucket position
     if control_state == 0:
         control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2], time_offset=3,
@@ -349,7 +351,7 @@ while True:
         rela_dist_state = 1
 
     # create and send message of safety controller
-    sc_state_msg = safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
+    sc_state_msg = safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=0,
                                                           excavator_state=np.packbits(excavator_work_state)[0])
     msg_set_ic.append(sc_state_msg)
     msg_set_ic.append(safety_control_msg.create_equip_origin_pos_msg(latitude=excavator_pos[0], longitude=excavator_pos[1]))
@@ -393,3 +395,4 @@ while True:
 
     logging_data.to_csv(logging_file_path, mode='a', header=False)
     time.sleep(0.1)
+    

@@ -24,11 +24,12 @@ def end_point_kinematics(boom_angle, arm_angle, bucket_angle):
 
 theta4_1: float = 0
 theta4_2: float = 0
+cal_link_angle: float = 0
 
-L1 = 348
-L2 = 420
-L3 = 450
-L4 = 508
+L1 = 351
+L2 = 421
+L3 = 457
+L4 = 510
 
 
 def link_calculator(theta2):
@@ -40,7 +41,14 @@ def link_calculator(theta2):
     e = E - (F * math.cos(theta2 * math.pi / 180)) + math.cos(theta2 * math.pi / 180) - G
 
     theta4_1 = 2 * math.degrees(math.atan(((-1 * f) + math.sqrt(pow(f, 2) - (4 * e * g)))/(2 * e)))
-    theta4_2 = 2 * math.degrees(math.atan(((-1 * f) - math.sqrt(pow(f, 2) - (4 * e * g)))/(2 * e)))
+    # theta4_2 = 2 * math.degrees(math.atan(((-1 * f) - math.sqrt(pow(f, 2) - (4 * e * g)))/(2 * e)))
+
+    if -180 <= theta4_1 <= 0:
+        theta4_1 += 180
+        theta4_1 = np.negative(theta4_1)
+
+    elif 0 < theta4_1 <= 180:
+        theta4_1 = 180 - theta4_1
 
     return theta4_1, theta4_2
 
