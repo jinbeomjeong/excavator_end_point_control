@@ -29,14 +29,6 @@ L2 = 420
 L3 = 450
 L4 = 508
 
-G = 0
-F = 0
-E = 0
-
-g = 0
-f = 0
-e = 0
-
 
 def link_calculator(theta2):
     G = L1 / L2
@@ -52,12 +44,12 @@ def link_calculator(theta2):
     return theta4_1, theta4_2
 
 
-angle_t1 = 0
-result_angle = 0
-
-
 def convert_bucket_angle(angle) -> float:
     return np.rad2deg(np.arcsin(np.sin(np.deg2rad(angle))))
+
+
+angle_t1 = 0
+result_angle = 0
 
 
 def angle_suppression_filter(angle) -> float:
@@ -72,6 +64,7 @@ def angle_suppression_filter(angle) -> float:
 
     return result_angle
 
+
 def fcn_1(body_t, boom_t, arm_t):
     theta_BS_offset = -14.28
     theta_AS_offset = -7.44
@@ -82,7 +75,7 @@ def fcn_1(body_t, boom_t, arm_t):
 
 
 def fcn_2(body_t, boom_ang, arm_ang, bkt_link_t):
-    Lk1, Lk3, Lk4, Lk5, Lk7, Lk2, Lk6, Lk8, Lk9 = 2294.95, 600.325, 515.6565, 2760, 1999.32, 660.7796, 474.3546, 879.2716, 2640.804
+    Lk3, Lk4, Lk7, Lk2, Lk6, Lk9 = 600.325, 515.6565, 1999.32, 660.7796, 474.3546, 2640.804
     a3, a4 = 3112.92, 1912.79
     theta_off3 = -91.0101
     delta_k1 = cos2ndraw(Lk9, Lk6, a3)
@@ -99,7 +92,6 @@ def fcn_2(body_t, boom_ang, arm_ang, bkt_link_t):
 
 def fwd_kin_30_fun(t1, t2, t3, t4):
     a1, d4 = 120, 0
-    Lk1, Lk3, Lk4, Lk5, Lk7, Lk2, Lk6, Lk8, Lk9 = 2294.95, 600.325, 515.6565, 2760, 1999.32, 660.7796, 474.3546, 879.2716, 2640.804
     # a2, a3, a4 = 6246.35, 3112.92, 1912.79
     a2, a3, a4 = boom_length, arm_length, bucket_length
     b1 = 30

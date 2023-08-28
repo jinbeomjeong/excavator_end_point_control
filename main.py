@@ -236,8 +236,7 @@ while True:
     relative_angle[0] = excavator_angle[0] - angle_sensor_offset[0] - excavator_angle[3]
     relative_angle[1] = excavator_angle[1] - angle_sensor_offset[1] - relative_angle[0]
     relative_angle[2] = excavator_angle[2] - relative_angle[0] - relative_angle[1]
-    relative_angle[2] = convert_bucket_angle(relative_angle[2])
-    relative_angle[2] = relative_angle[2] - angle_sensor_offset[2]
+    relative_angle[2] = convert_bucket_angle(relative_angle[2]) - angle_sensor_offset[2]
 
     # execute suppression angle
     # relative_angle[2] = angle_suppression_filter(relative_angle[2])
