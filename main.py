@@ -34,7 +34,7 @@ msg_set_ic, msg_set_cd = [], []
 control_state, safety_state, bucket_in_pipe, pipe_rela_dist = 0, 0, 0, 0
 t0_1: float = 0.0
 ic_state, cd_state, sc_state = 0, 0, 0
-target_pipe_depth: int = 700
+target_pipe_depth: int = 500
 excavator_work_state = np.zeros(shape=8, dtype=np.uint8)  # 1byte position: movement, 2byte position: work status
 cd_query = 'none'
 receive_state, done_state = True, True
@@ -61,7 +61,7 @@ cal_bucket = 0.0
 cal_bucket_prv = 0.0
 cal_bucket_result = 0.0
 
-angle_sensor_offset = np.array([268.5, 265.6, 20.0, 270], dtype=np.float64)  # offset angle of boom, arm, bucket and body
+angle_sensor_offset = np.array([268.5, 265.6, 23.0, 270.5], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 angle_sensor_offset.flags.writeable = False
 relative_angle = np.zeros(shape=3, dtype=np.float64)  # relative angle of boom, arm, bucket
 relative_angle_filtered = np.zeros(shape=3, dtype=np.float64)
@@ -188,6 +188,7 @@ class SensorFilter:
 boom_filter = SensorFilter(kernel_size=9)
 arm_filter = SensorFilter(kernel_size=9)
 bucket_filter = SensorFilter(kernel_size=9)
+bucket_filter_2 = SensorFilter(kernel_size=5)
 
 # set stand-by state change of safety controller
 system_info()
@@ -228,6 +229,9 @@ while True:
 
     excavator_angle[3] = body_sensor.read_sensor_value('x_axis')
 
+    # execute suppression bucket angle
+    excavator_angle[2] = bucket_filter_2.point_by_median(input_value=excavator_angle[2])
+
     # offset of body angle value
     excavator_angle[3] = excavator_angle[3] - angle_sensor_offset[3]
     excavator_angle[3] = np.negative(excavator_angle[3])
@@ -238,16 +242,15 @@ while True:
     relative_angle[2] = excavator_angle[2] - relative_angle[0] - relative_angle[1]
     relative_angle[2] = convert_bucket_angle(relative_angle[2]) - angle_sensor_offset[2]
 
-    # execute suppression angle
-    # relative_angle[2] = angle_suppression_filter(relative_angle[2])
-
-    # calculate low pass filter
-    for i in range(len(excavator_angle[0:3])):
+    # calculate low pass filter for boom and arm angle
+    for i in range(len(excavator_angle[0:2])):
         relative_angle_filtered[i] = np.add(np.multiply(0.5, relative_angle_filtered[i]),
                                             np.multiply(0.5, relative_angle[i]))
 
+    relative_angle_filtered[2] = relative_angle[2]
+
     # calculate absolute angle
-    absolute_angle_filtered[0] = relative_angle_filtered[0]
+    absolute_angle_filtered[0] = relative_angle_filtered[0] + excavator_angle[3]
     absolute_angle_filtered[1] = relative_angle_filtered[0] + relative_angle_filtered[1]
     absolute_angle_filtered[2] = relative_angle_filtered[0] + relative_angle_filtered[1] + relative_angle_filtered[2]
 
@@ -301,7 +304,7 @@ while True:
     # get target pipe depth
     if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0:
         target_pipe_depth = est_pipe_depth(target_position=bucket_global_pos, pipe_position=pipe_coords_tm,
-                                           pipe_depth=np.negative(pipe_depth), safety_length=1.0)
+                                           pipe_depth=np.negative(pipe_depth), safety_length=0.5)
 
         if bucket_in_pipe:
             pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
@@ -313,7 +316,7 @@ while True:
             pipe_rela_dist = 9999
 
     else:
-        target_pipe_depth = 700  # surface distance
+        target_pipe_depth = 500  # surface distance
         pipe_rela_dist = 9999  # invalid pipe relative distance
 
     # safety control of bucket position

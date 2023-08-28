@@ -5,19 +5,20 @@ import math
 boom_length = 4400  # unit: mm
 arm_length = 2110   # unit: mm
 bucket_length = 1260  # unit: mm
-height = 1700  # unit: mm
+height_offset = 1700  # unit: mm
+length_offset = 150  # unit: mm
 
 
 def end_point_kinematics(boom_angle, arm_angle, bucket_angle):
     x_pos_boom = boom_length * np.cos(np.deg2rad(boom_angle))
     x_pos_arm = arm_length * np.cos(np.deg2rad(arm_angle))
     x_pos_bucket = bucket_length * np.cos(np.deg2rad(bucket_angle))
-    x_pos = x_pos_boom + x_pos_arm + x_pos_bucket
+    x_pos = x_pos_boom + x_pos_arm + x_pos_bucket + length_offset
 
     z_pos_boom = boom_length * np.sin(np.deg2rad(boom_angle))
     z_pos_arm = arm_length * np.sin(np.deg2rad(arm_angle))
     z_pos_bucket = bucket_length * np.sin(np.deg2rad(bucket_angle))
-    z_pos = z_pos_boom + z_pos_arm + z_pos_bucket + height
+    z_pos = z_pos_boom + z_pos_arm + z_pos_bucket + height_offset
     return x_pos, z_pos
 
 
@@ -55,7 +56,7 @@ result_angle = 0
 def angle_suppression_filter(angle) -> float:
     global angle_t1, result_angle
 
-    if np.abs(angle-angle_t1) > 20:
+    if np.abs(angle-angle_t1) > 10:
         result_angle = angle_t1
     else:
         result_angle = angle
