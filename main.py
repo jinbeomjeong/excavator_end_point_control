@@ -4,14 +4,13 @@ import pandas as pd
 from utils.accessory_lib import system_info
 from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
-from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, link_calculator
+from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, bucket_link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
 from utils.warning_target import get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth, \
     get_target_boundary, recognition_in_range_boundary
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
 from typing import Final, List
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--ip", type=str, default='')
@@ -62,7 +61,7 @@ cal_bucket_prv = 0.0
 cal_bucket_result = 0.0
 
 # angle_sensor_offset = np.array([268.5, 265.6, 23.0, 270.5], dtype=np.float64)  # offset angle of boom, arm, bucket and body
-angle_sensor_offset = np.array([268.5, 265.6, -85.0, 270.5], dtype=np.float64)  # offset angle of boom, arm, bucket and body
+angle_sensor_offset = np.array([268.5, 265.6, -87.4, 270.5], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 angle_sensor_offset.flags.writeable = False
 relative_angle = np.zeros(shape=3, dtype=np.float64)  # relative angle of boom, arm, bucket
 relative_angle_filtered = np.zeros(shape=3, dtype=np.float64)
@@ -243,12 +242,13 @@ while True:
     relative_angle[2] = excavator_angle[2] - relative_angle[0] - relative_angle[1]
     relative_angle[2] = convert_bucket_angle(relative_angle[2]) - angle_sensor_offset[2]
 
+    # calculate bucket 4 link angle
+    relative_angle[2] = bucket_link_calculator(relative_angle[2])
+
     # calculate low pass filter for boom and arm angle
-    for i in range(len(excavator_angle[0:2])):
+    for i in range(len(excavator_angle[0:3])):
         relative_angle_filtered[i] = np.add(np.multiply(0.5, relative_angle_filtered[i]),
                                             np.multiply(0.5, relative_angle[i]))
-
-    relative_angle_filtered[2] = relative_angle[2]
 
     # calculate absolute angle
     absolute_angle_filtered[0] = relative_angle_filtered[0] + excavator_angle[3]
@@ -258,9 +258,6 @@ while True:
     # calculate median filter
     for i, sensor_filter in enumerate([boom_filter, arm_filter, bucket_filter]):
         comp_angle[i] = sensor_filter.point_by_median(input_value=relative_angle[i])
-
-    # calculate bucket 4 link angle
-    bucket_4_link_angle = link_calculator(relative_angle_filtered[2])
 
     # read value of joystick position
     for i, var_name in enumerate(['left_x_position', 'left_y_position', 'right_x_position', 'right_y_position']):
@@ -381,18 +378,20 @@ while True:
                               relative_angle_filtered[2], safety_state, np.packbits(excavator_work_state)[0], bucket_in_pipe]):
         tcp_msg[i] = data
 
-    logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(excavator_angle[0], 2),
-                                 '3': round(excavator_angle[1], 2), '4': round(excavator_angle[2], 2),
-                                 '5': round(excavator_angle[3], 2), '6': relative_angle[0], '7': relative_angle[1],
-                                 '8': bucket_4_link_angle, '9': joystick_pos[0], '10': joystick_pos[1],
-                                 '11': joystick_pos[2], '12': joystick_pos[3], '13': excavator_pos[0],
-                                 '14': excavator_pos[1], '15': excavator_pos[2], '16': bucket_global_pos[0],
-                                 '17': bucket_global_pos[1], '18': bucket_local_pos[2],
-                                 '19': np.packbits(excavator_work_state)[0], '20': control_state,
-                                 '21': target_pipe_depth, '22': gps_coords[0], '23': gps_coords[1],
-                                 '24': gps_coords[2], '25': gps_coords[3], '26': gps_coords_tm[0],
-                                 '27': gps_coords_tm[1], '28': gps_coords_tm[2], '29': gps_coords_tm[3]}, index=[0])
+    # logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(excavator_angle[0], 2),
+    #                              '3': round(excavator_angle[1], 2), '4': round(excavator_angle[2], 2),
+    #                              '5': round(excavator_angle[3], 2), '6': relative_angle[0], '7': relative_angle[1],
+    #                              '8': bucket_4_link_angle, '9': joystick_pos[0], '10': joystick_pos[1],
+    #                              '11': joystick_pos[2], '12': joystick_pos[3], '13': excavator_pos[0],
+    #                              '14': excavator_pos[1], '15': excavator_pos[2], '16': bucket_global_pos[0],
+    #                              '17': bucket_global_pos[1], '18': bucket_local_pos[2],
+    #                              '19': np.packbits(excavator_work_state)[0], '20': control_state,
+    #                              '21': target_pipe_depth, '22': gps_coords[0], '23': gps_coords[1],
+    #                              '24': gps_coords[2], '25': gps_coords[3], '26': gps_coords_tm[0],
+    #                              '27': gps_coords_tm[1], '28': gps_coords_tm[2], '29': gps_coords_tm[3]}, index=[0])
 
     logging_data.to_csv(logging_file_path, mode='a', header=False)
     time.sleep(0.1)
-    
+    # print(gps_coords)
+    # print(relative_angle_filtered, round(link_angle, 2))
+    # print(excavator_angle)

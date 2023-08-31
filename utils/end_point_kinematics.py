@@ -26,31 +26,10 @@ theta4_1: float = 0
 theta4_2: float = 0
 cal_link_angle: float = 0
 
-L1 = 351
-L2 = 421
-L3 = 457
-L4 = 510
-
-
-def link_calculator(theta2):
-    G = L1 / L2
-    F = L1 / L4
-    E = (pow(L3, 2) - pow(L2, 2) - pow(L4, 2) - pow(L1, 2)) / (-2 * L2 * L4)
-    g = E - (F * math.cos(theta2 * math.pi / 180)) - math.cos(theta2 * math.pi / 180) + G
-    f = -2 * math.sin(theta2 * math.pi / 180)
-    e = E - (F * math.cos(theta2 * math.pi / 180)) + math.cos(theta2 * math.pi / 180) - G
-
-    theta4_1 = 2 * math.degrees(math.atan(((-1 * f) + math.sqrt(pow(f, 2) - (4 * e * g)))/(2 * e)))
-    # theta4_2 = 2 * math.degrees(math.atan(((-1 * f) - math.sqrt(pow(f, 2) - (4 * e * g)))/(2 * e)))
-
-    if -180 <= theta4_1 <= 0:
-        theta4_1 += 180
-        theta4_1 = np.negative(theta4_1)
-
-    elif 0 < theta4_1 <= 180:
-        theta4_1 = 180 - theta4_1
-
-    return theta4_1, theta4_2
+l1 = 351
+l2 = 421
+l3 = 457
+l4 = 510
 
 
 def convert_bucket_angle(angle) -> float:
@@ -74,21 +53,12 @@ def angle_suppression_filter(angle) -> float:
     return result_angle
 
 
-def fcn_1(body_t, boom_t, arm_t):
-    theta_BS_offset = -14.28
-    theta_AS_offset = -7.44
-    boom = boom_t - theta_BS_offset - body_t
-    arm = arm_t - theta_AS_offset - boom - body_t
-
-    return boom, arm
-
-
-def fcn_2(body_t, boom_ang, arm_ang, bkt_link_t):
-    Lk3, Lk4, Lk7, Lk2, Lk6, Lk9 = 600.325, 515.6565, 1999.32, 660.7796, 474.3546, 2640.804
-    a3, a4 = 3112.92, 1912.79
-    theta_off3 = -91.0101
+def bucket_link_calculator(bucket_link_angle):
+    Lk3, Lk4, Lk7, Lk2, Lk6, Lk9 = 457, 421, 1415, 510, 351, 1760
+    a3, a4 = arm_length, bucket_length
     delta_k1 = cos2ndraw(Lk9, Lk6, a3)
-    delta_k7 = 180 + theta_off3 + bkt_link_t - arm_ang - boom_ang - body_t
+    delta_k7 = bucket_link_angle
+
     alpha_k2 = delta_k1 + delta_k7
     lk_link = cos2ndraw2(alpha_k2, Lk2, Lk6)
     alpha_k3 = cos2ndraw(Lk2, lk_link, Lk6)
@@ -96,26 +66,7 @@ def fcn_2(body_t, boom_ang, arm_ang, bkt_link_t):
     delta_k3 = cos2ndraw(Lk7, Lk4, a4)
     bkt = 180 - (delta_k1 + alpha_k3 + alpha_k4 + delta_k3)
 
-    return bkt, delta_k7, lk_link
-
-
-def fwd_kin_30_fun(t1, t2, t3, t4):
-    a1, d4 = 120, 0
-    # a2, a3, a4 = 6246.35, 3112.92, 1912.79
-    a2, a3, a4 = boom_length, arm_length, bucket_length
-    b1 = 30
-
-    x = a4*np.cos(np.radians(t1))*np.cos(np.radians(t2+t3+t4))+a3*np.cos(np.radians(t1))*np.cos(np.radians(t2+t3))+a2*np.cos(np.radians(t1))*np.cos(np.radians(t2))+a1*np.cos(np.radians(t1))+d4*np.sin(np.radians(t1))+b1*np.sin(np.radians(t1))
-    y = a4*np.sin(np.radians(t1))*np.cos(np.radians(t2+t3+t4))+a3*np.sin(np.radians(t1))*np.cos(np.radians(t2+t3))+a2*np.sin(np.radians(t1))*np.cos(np.radians(t2))+a1*np.sin(np.radians(t1))-d4*np.cos(np.radians(t1))-b1*np.cos(np.radians(t1))
-    z = a4*np.sin(np.radians(t2+t3+t4))+a3*np.sin(np.radians(t2+t3))+a2*np.sin(np.radians(t2))
-
-    beta = 90
-    alpha = np.rad2deg(np.arctan2(-np.cos(np.radians(t1)), np.sin(np.radians(t1))))
-    gamma = np.rad2deg(np.arctan2(np.cos(np.radians(t2+t3+t4)), -np.sin(np.radians(t2+t3+t4))))
-    position = [x, y, z]
-    rotation = [alpha, beta, gamma]
-
-    return position
+    return bkt
 
 
 def cos2ndraw2(angle_a, side_b, side_c):
