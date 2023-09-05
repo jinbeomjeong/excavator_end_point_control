@@ -3,8 +3,8 @@ import math
 
 
 boom_length = 4400  # unit: mm
-arm_length = 2110   # unit: mm
-bucket_length = 1260  # unit: mm
+arm_length = 2107   # unit: mm
+bucket_length = 1290  # unit: mm
 height_offset = 1700  # unit: mm
 length_offset = 150  # unit: mm
 
@@ -54,7 +54,7 @@ def angle_suppression_filter(angle) -> float:
 
 
 def bucket_link_calculator(bucket_link_angle):
-    Lk3, Lk4, Lk7, Lk2, Lk6, Lk9 = 457, 421, 1415, 510, 351, 1760
+    Lk3, Lk4, Lk7, Lk2, Lk6, Lk9 = 452, 420, 1423, 507.5, 350, 1759
     a3, a4 = arm_length, bucket_length
     delta_k1 = cos2ndraw(Lk9, Lk6, a3)
     delta_k7 = bucket_link_angle
