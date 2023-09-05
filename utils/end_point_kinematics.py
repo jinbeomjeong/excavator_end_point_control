@@ -19,6 +19,7 @@ def end_point_kinematics(boom_angle, arm_angle, bucket_angle):
     z_pos_arm = arm_length * np.sin(np.deg2rad(arm_angle))
     z_pos_bucket = bucket_length * np.sin(np.deg2rad(bucket_angle))
     z_pos = z_pos_boom + z_pos_arm + z_pos_bucket + height_offset
+
     return x_pos, z_pos
 
 

@@ -60,8 +60,8 @@ cal_bucket = 0.0
 cal_bucket_prv = 0.0
 cal_bucket_result = 0.0
 
-# angle_sensor_offset = np.array([268.5, 265.6, 23.0, 270.5], dtype=np.float64)  # offset angle of boom, arm, bucket and body
-angle_sensor_offset = np.array([268.5, 265.6, -87.4, 270.5], dtype=np.float64)  # offset angle of boom, arm, bucket and body
+# angle_sensor_offset = np.array([267.9, 265.4, -87.4, 270.0], dtype=np.float64)  # offset angle of boom, arm, bucket and body
+angle_sensor_offset = np.array([267.9, 265.4, -87.9, 270.0], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 angle_sensor_offset.flags.writeable = False
 relative_angle = np.zeros(shape=3, dtype=np.float64)  # relative angle of boom, arm, bucket
 relative_angle_filtered = np.zeros(shape=3, dtype=np.float64)
@@ -236,6 +236,7 @@ while True:
     excavator_angle[3] = excavator_angle[3] - angle_sensor_offset[3]
     excavator_angle[3] = np.negative(excavator_angle[3])
 
+    # print(excavator_angle[0]-angle_sensor_offset[0])
     # calculate relative angle
     relative_angle[0] = excavator_angle[0] - angle_sensor_offset[0] - excavator_angle[3]
     relative_angle[1] = excavator_angle[1] - angle_sensor_offset[1] - relative_angle[0]
@@ -393,5 +394,5 @@ while True:
     logging_data.to_csv(logging_file_path, mode='a', header=False)
     time.sleep(0.1)
     # print(gps_coords)
-    # print(relative_angle_filtered, round(link_angle, 2))
-    # print(excavator_angle)
+    print(bucket_local_pos)
+    #print(relative_angle_filtered)
