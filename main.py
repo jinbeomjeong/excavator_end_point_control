@@ -52,6 +52,7 @@ bucket_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
 # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
 joystick_pos = np.zeros(shape=4, dtype=np.uint8)
+joystick_pos_for_control = np.zeros(shape=3, dtype=np.float64)
 excavator_angle = np.zeros(shape=4, dtype=np.float64)
 comp_angle = np.zeros(shape=3, dtype=np.float64)  # boom, arm and bucket angle
 
@@ -67,6 +68,7 @@ relative_angle_filtered = np.zeros(shape=3, dtype=np.float64)
 absolute_angle_filtered = np.zeros(shape=3, dtype=np.float64)
 excavator_pos = np.zeros(shape=3, dtype=np.float64)  # latitude, longitude, heading
 
+predict_time_gain = np.array([1.0, 1.0, 1.0])
 elapsed_time: float = 0.0
 
 # excavator_tm_latitude, excavator_tm_longitude, heading
@@ -318,9 +320,27 @@ while True:
         target_pipe_depth = 500  # surface distance
         pipe_rela_dist = 9999  # invalid pipe relative distance
 
+    # create joystick signal for safety control
+    if joystick_pos[3] < 75:
+        joystick_pos_for_control[0] = (75-joystick_pos[3])/75
+    else:
+        joystick_pos_for_control[0] = 0.0
+
+    if joystick_pos[1] < 75:
+        joystick_pos_for_control[1] = (75-joystick_pos[1])/75
+    else:
+        joystick_pos_for_control[1] = 0.0
+
+    if joystick_pos[2] < 75:
+        joystick_pos_for_control[2] = (75-joystick_pos[2])/75
+    else:
+        joystick_pos_for_control[2] = 0.0
+
     # safety control of bucket position
     if control_state == 0:
-        control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2], time_offset=3,
+        control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2],
+                                                               joystick_signal=joystick_pos_for_control,
+                                                               time_gain=predict_time_gain,
                                                                threshold_signal=target_pipe_depth)
 
         t0_1 = time.time()

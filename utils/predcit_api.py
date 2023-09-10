@@ -1,9 +1,6 @@
-import time
+import time, end_point_kinematics
 import numpy as np
 from scipy.optimize import curve_fit
-
-
-np.set_printoptions(precision=3, suppress=True)
 
 
 i: int = 0
@@ -14,6 +11,12 @@ threshold_signal_prv: float = 0.0
 ttc: float = 0.0
 control_state_t1: int = 0
 result_control_state: int = 0
+
+boom_length = end_point_kinematics.boom_length
+arm_length = end_point_kinematics.arm_length
+bucket_length = end_point_kinematics.bucket_length
+
+time_offset_value = np.array([boom_length/bucket_length, arm_length/bucket_length, 1.0], dtype=np.float64)
 
 
 def predict_control_ttc(input_signal_1: float = 0, input_signal_2: float = 0, time_offset: float = 0.5,
@@ -96,19 +99,19 @@ def predict_control_quadratic(input_signal: float = 0, time_offset: float = 0.5,
     return control_state, predict_signal
 
 
-def predict_control_linear(input_signal: float = 0.0, time_offset: float = 0.5, threshold_signal: float = 0.0)\
-        -> (int, float):
-    
+def predict_control_linear(input_signal: float = 0.0, joystick_signal=np.ones(shape=3, dtype=np.float64),
+                           time_gain=np.ones(shape=3, dtype=np.float64), threshold_signal: float = 0.0) -> (int, float):
+    # joystick_signal = boom signal, arm signal, bucket signal
+
     global t0, t1, signal_t1, control_state_t1, result_control_state
 
     t0 = time.time()
-    signal_t0 = input_signal
-
     derivative_time = t0-t1
-    derivative_signal = signal_t0-signal_t1
+    derivative_signal = input_signal-signal_t1
     vel_signal = derivative_signal/derivative_time
-    
-    predict_signal = input_signal+(vel_signal*time_offset)
+    time_gain = time_gain * joystick_signal * time_offset_value
+
+    predict_signal = input_signal+np.sum(vel_signal*time_gain)
     
     if input_signal <= threshold_signal+0.2:
         if predict_signal <= threshold_signal-0.1 or input_signal <= threshold_signal:
@@ -118,15 +121,14 @@ def predict_control_linear(input_signal: float = 0.0, time_offset: float = 0.5, 
 
     else:
         control_state = 0
-        
-    signal_t1 = signal_t0
-    t1 = t0
-    
+
     if control_state == 1 and control_state_t1 == 1:
         result_control_state = 1
     else: 
         result_control_state = 0
         
+    signal_t1 = input_signal
+    t1 = t0
     control_state_t1 = control_state
-    
+
     return control_state, predict_signal
