@@ -1,5 +1,4 @@
 import numpy as np
-import math
 
 
 boom_length = 4400  # unit: mm
@@ -7,6 +6,9 @@ arm_length = 2107   # unit: mm
 bucket_length = 1290  # unit: mm
 height_offset = 1700  # unit: mm
 length_offset = 150  # unit: mm
+
+angle_t1 = 0
+result_angle = 0
 
 
 def end_point_kinematics(boom_angle, arm_angle, bucket_angle):
@@ -23,22 +25,8 @@ def end_point_kinematics(boom_angle, arm_angle, bucket_angle):
     return x_pos, z_pos
 
 
-theta4_1: float = 0
-theta4_2: float = 0
-cal_link_angle: float = 0
-
-l1 = 351
-l2 = 421
-l3 = 457
-l4 = 510
-
-
 def convert_bucket_angle(angle) -> float:
     return np.rad2deg(np.arcsin(np.sin(np.deg2rad(angle))))
-
-
-angle_t1 = 0
-result_angle = 0
 
 
 def angle_suppression_filter(angle) -> float:

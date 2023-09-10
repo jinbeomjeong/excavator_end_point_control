@@ -60,7 +60,6 @@ cal_bucket = 0.0
 cal_bucket_prv = 0.0
 cal_bucket_result = 0.0
 
-# angle_sensor_offset = np.array([267.9, 265.4, -87.4, 270.0], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 angle_sensor_offset = np.array([267.9, 265.4, -87.9, 270.0], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 angle_sensor_offset.flags.writeable = False
 relative_angle = np.zeros(shape=3, dtype=np.float64)  # relative angle of boom, arm, bucket
@@ -110,6 +109,7 @@ def can_com_cd_controller():
         safety_control_msg.get_cd_state(packet=can_msg)
         safety_control_msg.get_equip_pos(packet=can_msg)
         safety_control_msg.get_under_utils_query(packet=can_msg)
+        safety_control_msg.get_work_area_information(packet=can_msg)
         cd_query = safety_control_msg.read_variable('cd_query')
 
         if cd_query == 'ready_to_receive':
@@ -236,7 +236,6 @@ while True:
     excavator_angle[3] = excavator_angle[3] - angle_sensor_offset[3]
     excavator_angle[3] = np.negative(excavator_angle[3])
 
-    # print(excavator_angle[0]-angle_sensor_offset[0])
     # calculate relative angle
     relative_angle[0] = excavator_angle[0] - angle_sensor_offset[0] - excavator_angle[3]
     relative_angle[1] = excavator_angle[1] - angle_sensor_offset[1] - relative_angle[0]
@@ -284,6 +283,7 @@ while True:
     bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
                                                                        y_distance=bucket_local_pos[1],
                                                                        heading=excavator_pos[2])
+
     if pipe_coords_tm.shape[0] > 0:
         bucket_in_pipe = recognition_in_range_boundary(input_pos=bucket_global_pos,
                                                        target_pos_max=pipe_safety_boundary_coords_tm[0],
@@ -317,7 +317,6 @@ while True:
     else:
         target_pipe_depth = 500  # surface distance
         pipe_rela_dist = 9999  # invalid pipe relative distance
-
 
     # safety control of bucket position
     if control_state == 0:
@@ -359,6 +358,9 @@ while True:
     msg_set_ic.append(safety_control_msg.create_target_relative_distance_msg(state=rela_dist_state, distance=pipe_rela_dist))
     msg_set_ic.append(safety_control_msg.create_cd_state_msg(state=cd_state,
                                                              work_limit=0 if work_limit_state == 'de-active' else 1))
+    msg_set_ic.append(safety_control_msg.create_work_area_information_msg(
+        area_number=safety_control_msg.read_variable('work_area_number'),
+        admin_phone_number=safety_control_msg.read_variable('admin_phone_number')))
 
     for message_ic in msg_set_ic:
         can_channel_ic.send(message_ic)
@@ -393,6 +395,3 @@ while True:
 
     logging_data.to_csv(logging_file_path, mode='a', header=False)
     time.sleep(0.1)
-    # print(gps_coords)
-    print(bucket_local_pos)
-    #print(relative_angle_filtered)

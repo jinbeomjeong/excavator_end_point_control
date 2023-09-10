@@ -2,8 +2,6 @@ import can, cantools, time
 import numpy as np
 from typing import Final
 
-np.set_printoptions(suppress=True)
-
 
 class SafetyControlMsgParser:
     def __init__(self):
@@ -20,6 +18,8 @@ class SafetyControlMsgParser:
         self.__equipment_origin_pos_id: Final[int] = 0x18FF1014  # SC -> IC, CD
         self.__equipment_origin_heading_id: Final[int] = 0x18FF1015  # SC -> IC, CD
         self.__target_relative_distance_id: Final[int] = 0x18FF1018  # SC -> IC
+        self.__work_area_information_id: Final[int] = 0x18FF1017  # CD -> IC
+        self.__work_area_information_query_id: Final[int] = 0x18FF3012  # SC -> CD
 
         self.__ic_state: str = 'none'
         self.__cd_state: str = 'none'
@@ -32,6 +32,8 @@ class SafetyControlMsgParser:
         self.__equipment_altitude: np.ndarray = np.zeros(shape=2, dtype=np.float64)  # gps_1_altitude, gps_2_altitude
         self.__bucket_position_data: [int] = [0] * 3  # x_pos, y_pos, z_pos
         self.__compensation_angle_data = np.zeros(shape=3, dtype=np.float64)
+        self.__work_area_number: int = 0
+        self.__admin_phone_number = np.zeros(shape=3, dtype=np.uint16)
         self.__class__.get_under_utils_data.called = False
         self.__t0: Final[float] = time.time()
 
@@ -132,6 +134,14 @@ class SafetyControlMsgParser:
         self.__equipment_cal_pos[2] = 36 + (self.__equipment_raw_pos[2] * (10 ** -8))
         self.__equipment_cal_pos[3] = 126 + (self.__equipment_raw_pos[3] * (10 ** -8))
 
+    def get_work_area_information(self, packet=can.Message()):
+        if packet.arbitration_id == self.__work_area_information_id:
+            payload = packet.data
+            self.__work_area_number = int.from_bytes(payload[0:2], byteorder='little', signed=False)
+
+            for i in range(3):
+                self.__admin_phone_number[i] = int.from_bytes(payload[2*(i+1):(2*(i+1))+2], byteorder='little', signed=False)
+
     def create_sc_state_msg(self, sc_state: int = 0, safety_state: int = 0, excavator_state: int = 0) -> can.Message:
         payload = [sc_state, safety_state, excavator_state]
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__sc_state_id, data=payload,
@@ -209,6 +219,19 @@ class SafetyControlMsgParser:
 
         return send_msg
 
+    def create_work_area_information_msg(self, area_number: int = 0,
+                                         admin_phone_number=np.zeros(shape=3, dtype=np.uint16)) -> can.Message:
+        payload = bytes(0)
+        payload += area_number.to_bytes(length=2, byteorder='little')
+
+        for number in admin_phone_number:
+            payload += number.to_bytes(length=2, byteorder='little')
+
+        send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__work_area_information_id,
+                               data=payload, is_extended_id=True)
+
+        return send_msg
+
     def read_variable(self, parameter_name: str = ''):
         if parameter_name == 'ic_state':
             return self.__ic_state
@@ -242,6 +265,12 @@ class SafetyControlMsgParser:
 
         elif parameter_name == 'work_limit':
             return self.__work_limit
+
+        elif parameter_name == 'work_area_number':
+            return self.__work_area_number
+
+        elif parameter_name == 'admin_phone_number':
+            return self.__admin_phone_number
 
 
 class JoystickMsgParser:
