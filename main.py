@@ -6,8 +6,8 @@ from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
 from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, bucket_link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
-from utils.warning_target import get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth, \
-    get_target_boundary, recognition_in_range_boundary
+from utils.warning_target import (get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth_nearest,
+                                  get_target_boundary, recognition_in_range_boundary)
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
 from typing import Final, List
@@ -33,7 +33,7 @@ msg_set_ic, msg_set_cd = [], []
 control_state, safety_state, bucket_in_pipe, pipe_rela_dist = 0, 0, 0, 0
 t0_1: float = 0.0
 ic_state, cd_state, sc_state = 0, 0, 0
-target_pipe_depth: int = 500
+target_pipe_depth: int = -9999
 excavator_work_state = np.zeros(shape=8, dtype=np.uint8)  # 1byte position: movement, 2byte position: work status
 cd_query = 'none'
 receive_state, done_state = True, True
@@ -52,7 +52,6 @@ bucket_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
 # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
 joystick_pos = np.zeros(shape=4, dtype=np.uint8)
-joystick_pos_for_control = np.zeros(shape=3, dtype=np.float64)
 excavator_angle = np.zeros(shape=4, dtype=np.float64)
 comp_angle = np.zeros(shape=3, dtype=np.float64)  # boom, arm and bucket angle
 
@@ -68,7 +67,6 @@ relative_angle_filtered = np.zeros(shape=3, dtype=np.float64)
 absolute_angle_filtered = np.zeros(shape=3, dtype=np.float64)
 excavator_pos = np.zeros(shape=3, dtype=np.float64)  # latitude, longitude, heading
 
-predict_time_gain = np.array([1.0, 1.0, 1.0])
 elapsed_time: float = 0.0
 
 # excavator_tm_latitude, excavator_tm_longitude, heading
@@ -281,7 +279,6 @@ while True:
     bucket_local_pos[1], bucket_local_pos[2] = end_point_kinematics(boom_angle=absolute_angle_filtered[0],
                                                                     arm_angle=absolute_angle_filtered[1],
                                                                     bucket_angle=absolute_angle_filtered[2])
-
     bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
                                                                        y_distance=bucket_local_pos[1],
                                                                        heading=excavator_pos[2])
@@ -303,44 +300,26 @@ while True:
     work_limit_state = safety_control_msg.read_variable('work_limit')  # enable work_limit_state = 'de-active'
 
     # get target pipe depth
-    if work_limit_state == 'de-active' and pipe_coords_tm.shape[0] > 0:
-        target_pipe_depth = est_pipe_depth(target_position=bucket_global_pos, pipe_position=pipe_coords_tm,
-                                           pipe_depth=np.negative(pipe_depth), safety_length=0.5)
-
-        if bucket_in_pipe:
-            pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
-            pipe_rela_dist = np.abs(pipe_rela_dist)
-            pipe_rela_dist = int(pipe_rela_dist / 10)
-
-        else:
-            target_pipe_depth = -9999
-            pipe_rela_dist = 9999
+    if bucket_in_pipe:
+        target_pipe_depth = est_pipe_depth_nearest(target_position=bucket_global_pos, pipe_position=pipe_coords_tm,
+                                                   pipe_depth=np.negative(pipe_depth), safety_length=0.1)
+        pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
+        pipe_rela_dist = np.abs(pipe_rela_dist)
+        pipe_rela_dist = int(pipe_rela_dist / 10)
 
     else:
-        target_pipe_depth = 500  # surface distance
+        target_pipe_depth = -9999  # normal excavating depth
         pipe_rela_dist = 9999  # invalid pipe relative distance
 
-    # create joystick signal for safety control
-    if joystick_pos[3] < 75:
-        joystick_pos_for_control[0] = (75-joystick_pos[3])/75
-    else:
-        joystick_pos_for_control[0] = 0.0
+    if work_limit_state == 'active':
+        target_pipe_depth = 200  # ground limit excavating depth
 
-    if joystick_pos[1] < 75:
-        joystick_pos_for_control[1] = (75-joystick_pos[1])/75
     else:
-        joystick_pos_for_control[1] = 0.0
-
-    if joystick_pos[2] < 75:
-        joystick_pos_for_control[2] = (75-joystick_pos[2])/75
-    else:
-        joystick_pos_for_control[2] = 0.0
+        target_pipe_depth = -9999
 
     # safety control of bucket position
     if control_state == 0:
-        control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2],
-                                                               joystick_signal=joystick_pos_for_control,
-                                                               time_gain=predict_time_gain,
+        control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2], time_offset=3,
                                                                threshold_signal=target_pipe_depth)
 
         t0_1 = time.time()
@@ -368,7 +347,7 @@ while True:
         rela_dist_state = 1
 
     # create and send message of safety controller
-    sc_state_msg = safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=0,
+    sc_state_msg = safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
                                                           excavator_state=np.packbits(excavator_work_state)[0])
     msg_set_ic.append(sc_state_msg)
     msg_set_ic.append(safety_control_msg.create_equip_origin_pos_msg(latitude=excavator_pos[0], longitude=excavator_pos[1]))
@@ -377,7 +356,7 @@ while True:
                                                                bucket_angle=comp_angle[2]))
     msg_set_ic.append(safety_control_msg.create_target_relative_distance_msg(state=rela_dist_state, distance=pipe_rela_dist))
     msg_set_ic.append(safety_control_msg.create_cd_state_msg(state=cd_state,
-                                                             work_limit=0 if work_limit_state == 'de-active' else 1))
+                                                             work_limit=1 if work_limit_state == 'active' else 0))
     msg_set_ic.append(safety_control_msg.create_work_area_information_msg(
         area_number=safety_control_msg.read_variable('work_area_number'),
         admin_phone_number=safety_control_msg.read_variable('admin_phone_number')))

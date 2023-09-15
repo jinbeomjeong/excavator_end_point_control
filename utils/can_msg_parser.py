@@ -1,4 +1,4 @@
-import can, cantools, time
+import can, time
 import numpy as np
 from typing import Final
 
@@ -62,10 +62,10 @@ class SafetyControlMsgParser:
             elif payload[0] == 2:
                 self.__cd_state = 'on'
 
-            if payload[0] == 0:
-                self.__work_limit = 'active'
-            elif payload[0] == 1:
+            if payload[1] == 0:
                 self.__work_limit = 'de-active'
+            elif payload[1] == 1:
+                self.__work_limit = 'active'
 
     def get_under_utils_query(self, packet=can.Message()):
         if packet.arbitration_id == self.__under_utils_query_cd_id:
@@ -225,7 +225,7 @@ class SafetyControlMsgParser:
         payload += area_number.to_bytes(length=2, byteorder='little')
 
         for number in admin_phone_number:
-            payload += number.to_bytes(length=2, byteorder='little')
+            payload += int(number).to_bytes(length=2, byteorder='little')
 
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__work_area_information_id,
                                data=payload, is_extended_id=True)
