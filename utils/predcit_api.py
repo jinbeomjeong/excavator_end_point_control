@@ -12,6 +12,7 @@ t1: float = 0.0
 signal_t1: float = 0.0
 threshold_signal_prv: float = 0.0
 ttc: float = 0.0
+control_state: int = 0
 control_state_t1: int = 0
 result_control_state: int = 0
 
@@ -96,10 +97,10 @@ def predict_control_quadratic(input_signal: float = 0, time_offset: float = 0.5,
     return control_state, predict_signal
 
 
-def predict_control_linear(input_signal: float = 0.0, time_offset: float = 0.5, threshold_signal: float = 0.0)\
-        -> (int, float):
+def predict_control_linear(input_signal: float = 0.0, time_offset: float = 0.5, threshold_signal: float = 0.0,
+                           release_signal=0) -> (int, float):
     
-    global t0, t1, signal_t1, control_state_t1, result_control_state
+    global t0, t1, signal_t1, control_state, control_state_t1, result_control_state
 
     t0 = time.time()
     signal_t0 = input_signal
@@ -108,17 +109,19 @@ def predict_control_linear(input_signal: float = 0.0, time_offset: float = 0.5, 
     derivative_signal = signal_t0-signal_t1
     vel_signal = derivative_signal/derivative_time
     
-    predict_signal = input_signal+(vel_signal*0.1)
+    predict_signal = input_signal+(vel_signal*time_offset)
 
-    if input_signal <= threshold_signal+0.2:
-        if predict_signal <= threshold_signal-0.1 or input_signal <= threshold_signal:
+    if threshold_signal < input_signal < threshold_signal+release_signal:
+        if predict_signal <= threshold_signal:
             control_state = 1
         else:
             control_state = 0
-
     else:
         control_state = 0
-        
+
+    if input_signal <= threshold_signal:
+        control_state = 1
+
     signal_t1 = signal_t0
     t1 = t0
     

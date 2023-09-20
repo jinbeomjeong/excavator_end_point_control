@@ -6,8 +6,8 @@ from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
 from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, bucket_link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
-from utils.warning_target import (get_global_bucket_pos, get_close_pipe_status, interp_2d_target, est_pipe_depth_nearest,
-                                  get_target_boundary, recognition_in_range_boundary)
+from utils.warning_target import (get_global_bucket_pos, interp_2d_target, est_pipe_depth_nearest, get_target_boundary,
+                                  recognition_in_range_boundary)
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
 from typing import Final, List
@@ -290,13 +290,6 @@ while True:
     else:
         bucket_in_pipe = 0
 
-    # recognition to safety status of bucket position
-    if pipe_coords_tm.shape[0] > 0:
-        bucket_safety_status = get_close_pipe_status(bucket_global_pos=bucket_global_pos,
-                                                     pipe_pos=pipe_coords_tm_interp)
-    else:
-        bucket_safety_status = 0
-
     work_limit_state = safety_control_msg.read_variable('work_limit')  # enable work_limit_state = 'de-active'
 
     # get target pipe depth
@@ -312,32 +305,22 @@ while True:
         pipe_rela_dist = 9999  # invalid pipe relative distance
 
     if work_limit_state == 'active':
-        target_pipe_depth = 200  # ground limit excavating depth
-
-    else:
-        target_pipe_depth = -9999
+        target_pipe_depth = 500  # ground limit excavating depth
 
     # safety control of bucket position
     if control_state == 0:
-        control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2], time_offset=3,
-                                                               threshold_signal=target_pipe_depth)
+        control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2], time_offset=1.0,
+                                                               threshold_signal=target_pipe_depth, release_signal=500)
 
         t0_1 = time.time()
 
     if control_state == 1:
         el_time = np.subtract(time.time(), t0_1)
 
-        if np.greater_equal(bucket_local_pos[2], np.multiply(target_pipe_depth, 1.5)) and np.greater(el_time, 2.0):
+        if np.greater_equal(bucket_local_pos[2], target_pipe_depth+500) and np.greater(el_time, 2.0):
             control_state = 0
         else:
             control_state = 1
-
-    if bucket_safety_status:
-        safety_state = 1
-    elif control_state:
-        safety_state = 2
-    else:
-        safety_state = 0
 
     rela_dist_state = 0
 
@@ -345,6 +328,12 @@ while True:
         rela_dist_state = 0
     else:
         rela_dist_state = 1
+
+    safety_state = 0
+    if bucket_in_pipe:
+        safety_state = 1
+    if control_state:
+        safety_state = 2
 
     # create and send message of safety controller
     sc_state_msg = safety_control_msg.create_sc_state_msg(sc_state=2, safety_state=safety_state,
