@@ -1,4 +1,4 @@
-import can, time
+import can, time, cantools
 import numpy as np
 from typing import Final
 
@@ -20,6 +20,7 @@ class SafetyControlMsgParser:
         self.__target_relative_distance_id: Final[int] = 0x18FF1018  # SC -> IC
         self.__work_area_information_id: Final[int] = 0x18FF1017  # CD -> IC
         self.__work_area_information_query_id: Final[int] = 0x18FF3012  # SC -> CD
+        self.__end_point_position_id: Final[int] = 0x18FF1019
 
         self.__ic_state: str = 'none'
         self.__cd_state: str = 'none'
@@ -149,8 +150,9 @@ class SafetyControlMsgParser:
 
         return send_msg
 
-    def create_comp_angle_msg(self, boom_angle: float = 0.0, arm_angle: float = 0.0, bucket_angle: float = 0.0) \
-            -> can.Message:
+    def create_comp_angle_msg(self, boom_angle: np.ndarray = 0.0, arm_angle: np.ndarray = 0.0,
+                              bucket_angle: np.ndarray = 0.0) -> can.Message:
+
         self.__compensation_angle_data[0] = boom_angle
         self.__compensation_angle_data[1] = arm_angle
         self.__compensation_angle_data[2] = bucket_angle
@@ -171,7 +173,7 @@ class SafetyControlMsgParser:
 
         return send_msg
 
-    def create_equip_origin_pos_msg(self, latitude: float = 0.0, longitude: float = 0.0) -> can.Message:
+    def create_equip_origin_pos_msg(self, latitude: np.ndarray = 0.0, longitude: np.ndarray = 0.0) -> can.Message:
         self.__equipment_origin_pos[0] = latitude * (10**-8)
         self.__equipment_origin_pos[1] = longitude * (10**-8)
         payload = bytes(0)
@@ -184,7 +186,7 @@ class SafetyControlMsgParser:
 
         return send_msg
 
-    def create_equip_heading_msg(self, heading: float = 0.0) -> can.Message:
+    def create_equip_heading_msg(self, heading: np.ndarray = 0.0) -> can.Message:
         payload = int(heading * 10).to_bytes(length=2, byteorder='little')
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__equipment_origin_heading_id,
                                data=payload, is_extended_id=True)
@@ -228,6 +230,16 @@ class SafetyControlMsgParser:
             payload += int(number).to_bytes(length=2, byteorder='little')
 
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__work_area_information_id,
+                               data=payload, is_extended_id=True)
+
+        return send_msg
+
+    def create_end_point_position_msg(self, x_axis: np.ndarray = 0.0, y_axis: np.ndarray = 0.0) -> can.Message:
+        payload = bytes(0)
+        payload += int(x_axis*1000).to_bytes(length=4, byteorder='little')
+        payload += int(y_axis*1000).to_bytes(length=4, byteorder='little')
+
+        send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__end_point_position_id,
                                data=payload, is_extended_id=True)
 
         return send_msg

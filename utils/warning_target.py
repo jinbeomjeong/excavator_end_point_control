@@ -7,6 +7,7 @@ from typing import Tuple, List
 est_depth = np.zeros(2, dtype=np.double)
 in_range_x_pos, in_range_y_pos = 0, 0
 bucket_in_range = []
+bucket_global_pos = np.zeros(shape=2, dtype=np.float64)
 
 
 def interp_2d_target(target_pos: np.ndarray, step) -> np.ndarray:  # target_pos: np.ndarray of n*2
@@ -106,16 +107,18 @@ def __get_distance_opt(origin: np.ndarray, target: np.ndarray, threshold: float)
     return dis_arr, in_work
 
 
-def get_global_bucket_pos(origin: List, y_distance, heading: float) -> Tuple[float, float]:
+def get_bucket_global_pos(origin: np.ndarray, y_distance: np.ndarray, heading: np.ndarray) -> np.ndarray:
+    global bucket_global_pos
+
     heading = (heading+360) % 360
     y_distance /= 1000
-    latitude = np.cos(np.deg2rad(heading)) * y_distance + origin[0]
-    longitude = np.sin(np.deg2rad(heading)) * y_distance + origin[1]
+    bucket_global_pos[0] = np.cos(np.deg2rad(heading)) * y_distance + origin[0]
+    bucket_global_pos[1] = np.sin(np.deg2rad(heading)) * y_distance + origin[1]
 
-    return latitude, longitude
+    return bucket_global_pos
 
 
-def get_close_pipe_status(bucket_global_pos: np.ndarray, pipe_pos: np.ndarray) -> int:
-    end_point_status = 1 if np.sum(__get_distance(bucket_global_pos, pipe_pos) < 0.01) else 0
+def get_close_pipe_status(bucket_pos: np.ndarray, pipe_pos: np.ndarray) -> int:
+    end_point_status = 1 if np.sum(__get_distance(bucket_pos, pipe_pos) < 0.01) else 0
 
     return end_point_status

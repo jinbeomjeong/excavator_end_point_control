@@ -6,7 +6,7 @@ from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
 from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, bucket_link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
-from utils.warning_target import (get_global_bucket_pos, interp_2d_target, est_pipe_depth_nearest, get_target_boundary,
+from utils.warning_target import (get_bucket_global_pos, interp_2d_target, est_pipe_depth_nearest, get_target_boundary,
                                   recognition_in_range_boundary)
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
@@ -279,7 +279,7 @@ while True:
     bucket_local_pos[1], bucket_local_pos[2] = end_point_kinematics(boom_angle=absolute_angle_filtered[0],
                                                                     arm_angle=absolute_angle_filtered[1],
                                                                     bucket_angle=absolute_angle_filtered[2])
-    bucket_global_pos[0], bucket_global_pos[1] = get_global_bucket_pos(origin=[excavator_pos[0], excavator_pos[1]],
+    bucket_global_pos[0], bucket_global_pos[1] = get_bucket_global_pos(origin=excavator_pos[0:2],
                                                                        y_distance=bucket_local_pos[1],
                                                                        heading=excavator_pos[2])
 
@@ -355,8 +355,10 @@ while True:
 
     msg_set_ic = []
 
-    # create and send message of cd device
+    # create and send message of communication device
     msg_set_cd.append(sc_state_msg)
+    msg_set_cd.append(safety_control_msg.create_end_point_position_msg(x_axis=bucket_global_pos[0],
+                                                                       y_axis=bucket_global_pos[1]))
 
     for message_cd in msg_set_cd:
         can_channel_cd.send(message_cd)
