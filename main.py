@@ -1,4 +1,4 @@
-import time, threading, can, argparse, functools
+import time, threading, can, argparse
 import numpy as np
 import pandas as pd
 from utils.accessory_lib import system_info
@@ -10,7 +10,7 @@ from utils.warning_target import (get_bucket_global_pos, interp_2d_target, est_p
                                   recognition_in_range_boundary)
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
-from typing import Final, List
+from typing import Final
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--ip", type=str, default='')
@@ -55,13 +55,9 @@ joystick_pos = np.zeros(shape=4, dtype=np.uint8)
 excavator_angle = np.zeros(shape=4, dtype=np.float64)
 comp_angle = np.zeros(shape=3, dtype=np.float64)  # boom, arm and bucket angle
 
-bucket_4_link_angle = 0.0
-cal_bucket = 0.0
-cal_bucket_prv = 0.0
-cal_bucket_result = 0.0
-
 angle_sensor_offset = np.array([267.9, 265.4, -87.9, 270.0], dtype=np.float64)  # offset angle of boom, arm, bucket and body
 angle_sensor_offset.flags.writeable = False
+
 relative_angle = np.zeros(shape=3, dtype=np.float64)  # relative angle of boom, arm, bucket
 relative_angle_filtered = np.zeros(shape=3, dtype=np.float64)
 absolute_angle_filtered = np.zeros(shape=3, dtype=np.float64)
@@ -155,19 +151,15 @@ class TcpCom:
         tcp_thread.start()
 
 
+# start thread for can communication ic controller
 can_com_ic_task = threading.Thread(target=can_com_ic_controller)
 can_com_ic_task.daemon = True
 can_com_ic_task.start()
 
+# start thread for can communication cd_controller
 can_com_cd_task = threading.Thread(target=can_com_cd_controller)
 can_com_cd_task.daemon = True
 can_com_cd_task.start()
-
-'''
-can_msg_send_ic_task = threading.Timer(interval=0.02, function=can_com_ic_send, args=())
-can_msg_send_ic_task.daemon = True
-can_msg_send_ic_task.start()
-'''
 
 if len(args.ip) > 0:
     tcp_task = TcpCom(ip=args.ip)
@@ -341,8 +333,8 @@ while True:
     msg_set_ic.append(sc_state_msg)
     msg_set_ic.append(safety_control_msg.create_equip_origin_pos_msg(latitude=excavator_pos[0], longitude=excavator_pos[1]))
     msg_set_ic.append(safety_control_msg.create_equip_heading_msg(heading=excavator_pos[2]))
-    msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=comp_angle[0], arm_angle=comp_angle[1],
-                                                               bucket_angle=comp_angle[2]))
+    msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=relative_angle[0], arm_angle=relative_angle[1],
+                                                               bucket_angle=relative_angle[2]))
     msg_set_ic.append(safety_control_msg.create_target_relative_distance_msg(state=rela_dist_state, distance=pipe_rela_dist))
     msg_set_ic.append(safety_control_msg.create_cd_state_msg(state=cd_state,
                                                              work_limit=1 if work_limit_state == 'active' else 0))
