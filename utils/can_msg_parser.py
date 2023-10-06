@@ -236,6 +236,10 @@ class SafetyControlMsgParser:
 
     def create_end_point_position_msg(self, x_axis: np.ndarray = 0.0, y_axis: np.ndarray = 0.0) -> can.Message:
         payload = bytes(0)
+
+        if x_axis <= 0: x_axis = 0
+        if y_axis <= 0: y_axis = 0
+
         payload += int(x_axis*1000).to_bytes(length=4, byteorder='little')
         payload += int(y_axis*1000).to_bytes(length=4, byteorder='little')
 
