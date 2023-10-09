@@ -1,6 +1,7 @@
 import time, threading, can, argparse
 import numpy as np
 import pandas as pd
+from pyproj import Transformer
 from utils.accessory_lib import system_info
 from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
@@ -184,9 +185,13 @@ arm_filter = SensorFilter(kernel_size=9)
 bucket_filter = SensorFilter(kernel_size=9)
 bucket_filter_2 = SensorFilter(kernel_size=5)
 
-# set stand-by state change of safety controller
+# convert gps coordinate
+converter_grs80_to_wgs84 = Transformer.from_crs("EPSG:5186", "EPSG:4326")
+converter_wgs84_to_grs80 = Transformer.from_crs("EPSG:4326", "EPSG:5186")
+
 system_info()
 
+# set stand-by state change of safety controller
 '''
 # waiting for integrated controller
 while True:
@@ -207,8 +212,8 @@ while True:
         gps_coords[i] = cal_pos
 
     # convert TM coordinate
-    gps_coords_tm[1], gps_coords_tm[0] = gps_unit_change(latitude=gps_coords[0], longitude=gps_coords[1])  # TM coordinate of x pos, y pos
-    gps_coords_tm[3], gps_coords_tm[2] = gps_unit_change(latitude=gps_coords[2], longitude=gps_coords[3])
+    gps_coords_tm[0], gps_coords_tm[1] = converter_wgs84_to_grs80.transform(xx=gps_coords[0], yy=gps_coords[1]) # TM coordinate of x pos, y pos
+    gps_coords[2], gps_coords[3] = converter_wgs84_to_grs80.transform(xx=gps_coords[2], yy=gps_coords[3])
 
     # estimation excavator center position
     excavator_pos[0], excavator_pos[1] = est_gps_center(gps_1_coord=gps_coords_tm[0:2], gps_2_coord=gps_coords_tm[2:4], offset=1.16)

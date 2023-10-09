@@ -67,7 +67,7 @@ def est_pipe_depth_euclidean(target_position: np.ndarray, pipe_position: np.ndar
     pipe_pos_index_arr = np.arange(pipe_position.shape[0])
     distance_arr = get_distance(origin=target_position, target=pipe_position)
     est_depth = np.interp(x=np.argmin(distance_arr), xp=pipe_pos_index_arr, fp=pipe_depth)+safety_length
-    print(np.argmin(distance_arr))
+
     return est_depth.item()
 
 
