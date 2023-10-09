@@ -4,7 +4,8 @@ from numba import jit
 from typing import Tuple, List
 
 
-est_depth = np.zeros(2, dtype=np.double)
+est_depth_arr = np.zeros(2, dtype=np.double)
+est_depth: float = 0.0
 in_range_x_pos, in_range_y_pos = 0, 0
 bucket_in_range = []
 bucket_global_pos = np.zeros(shape=2, dtype=np.float64)
@@ -27,20 +28,47 @@ def interp_2d_target(target_pos: np.ndarray, step) -> np.ndarray:  # target_pos:
     return target_interp_pos
 
 
+def interp_1d_target(target_position: np.ndarray, step: int = 1) -> np.ndarray:
+    output_array = np.array([])
+
+    for i in range(target_position.shape[0]-1):
+        inter_arr = np.linspace(target_position[i], target_position[i+1], step, endpoint=False)
+        output_array = np.append(output_array, inter_arr)
+
+    output_array = np.append(output_array, target_position[target_position.shape[0]-1])
+
+    return output_array
+
+
 def est_pipe_depth_interpolate(target_position: np.ndarray, pipe_position: np.ndarray, pipe_depth: np.ndarray,
                                safety_length: float = 0.0) -> float:
+    global est_depth_arr
+
     for i, pos in enumerate(target_position):
-        est_depth[i] = (np.interp(x=pos, xp=pipe_position[:, i], fp=pipe_depth))+safety_length
+        est_depth_arr[i] = (np.interp(x=pos, xp=pipe_position[:, i], fp=pipe_depth))+safety_length
 
     return np.multiply(np.max(est_depth), 1000)
 
 
 def est_pipe_depth_nearest(target_position: np.ndarray, pipe_position: np.ndarray, pipe_depth: np.ndarray,
                            safety_length: float = 0.0) -> float:
+    global est_depth_arr
+
     for i, pos in enumerate(target_position):
-        est_depth[i] = pipe_depth[np.argmin(np.abs(pos-pipe_position[:, i]))]+safety_length
+        est_depth_arr[i] = pipe_depth[np.argmin(np.abs(pos-pipe_position[:, i]))]+safety_length
 
     return np.multiply(np.max(est_depth), 1000)
+
+
+def est_pipe_depth_euclidean(target_position: np.ndarray, pipe_position: np.ndarray, pipe_depth: np.ndarray,
+                             safety_length: float = 0.0) -> float:
+    global est_depth
+
+    pipe_pos_index_arr = np.arange(pipe_position.shape[0])
+    distance_arr = get_distance(origin=target_position, target=pipe_position)
+    est_depth = np.interp(x=np.argmin(distance_arr), xp=pipe_pos_index_arr, fp=pipe_depth)+safety_length
+    print(np.argmin(distance_arr))
+    return est_depth.item()
 
 
 def get_target_boundary(target_pos: np.ndarray, radius: np.ndarray, step: int = 10) -> np.ndarray:
@@ -84,8 +112,8 @@ def get_working_area(origin, radius):
     return x_pos, y_pos
 
 
-def __get_distance(origin: np.ndarray, target: np.ndarray) -> np.ndarray:
-    dis_arr = np.zeros(target.shape[0])
+def get_distance(origin: np.ndarray, target: np.ndarray) -> np.ndarray:
+    dis_arr = np.zeros(target.shape[0], dtype=np.float64)
 
     for i, pos in enumerate(target):
         dis_arr[i] = distance.euclidean(origin, pos)
@@ -94,8 +122,8 @@ def __get_distance(origin: np.ndarray, target: np.ndarray) -> np.ndarray:
 
 
 @jit(nopython=True, cache=True)
-def __get_distance_opt(origin: np.ndarray, target: np.ndarray, threshold: float) -> Tuple[np.ndarray, np.ndarray]:
-    dis_arr = np.zeros(target.shape[0], dtype=np.float32)
+def get_distance_opt(origin: np.ndarray, target: np.ndarray, threshold: float) -> Tuple[np.ndarray, np.ndarray]:
+    dis_arr = np.zeros(target.shape[0], dtype=np.float64)
     dis_bool = np.zeros(target.shape[0], dtype=np.uint8)
 
     for i, pos in enumerate(target):

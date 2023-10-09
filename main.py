@@ -6,8 +6,8 @@ from utils.predcit_api import predict_control_linear
 from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
 from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, bucket_link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
-from utils.warning_target import (get_bucket_global_pos, interp_2d_target, est_pipe_depth_nearest, get_target_boundary,
-                                  recognition_in_range_boundary)
+from utils.warning_target import (get_bucket_global_pos, interp_2d_target, interp_1d_target, est_pipe_depth_euclidean,
+                                  get_target_boundary, recognition_in_range_boundary)
 from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, JoystickMsgParser
 from utils.tcp_lib import TCPClient
 from typing import Final
@@ -43,6 +43,7 @@ pipe_coords_tm_interp = np.array([])
 pipe_boundary_coords_tm = np.array([])
 pipe_safety_boundary_coords_tm = np.array([])
 pipe_depth, pipe_diameter = np.array([]), np.array([])
+pipe_depth_interp = np.array([])
 
 gps_coords = np.zeros(shape=4, dtype=np.float64)  # gps_1_latitude, gps_1_longitude, gps_2_latitude, gps_2_longitude
 gps_coords_tm = np.zeros(shape=4, dtype=np.float64)  # converted from gps_coords
@@ -99,7 +100,7 @@ def can_com_ic_controller():
 
 def can_com_cd_controller():
     global cd_query, receive_state, done_state, pipe_coords, pipe_depth, pipe_coords_tm, pipe_coords_tm_interp, \
-        pipe_diameter, pipe_boundary_coords_tm, pipe_safety_boundary_coords_tm
+        pipe_depth_interp, pipe_diameter, pipe_boundary_coords_tm, pipe_safety_boundary_coords_tm
 
     for can_msg in can_channel_cd:
         safety_control_msg.get_cd_state(packet=can_msg)
@@ -130,6 +131,7 @@ def can_com_cd_controller():
                     pipe_coords_tm[i, 1], pipe_coords_tm[i, 0] = gps_unit_change(latitude=pipe_coord[0], longitude=pipe_coord[1])
 
                 pipe_coords_tm_interp = interp_2d_target(pipe_coords_tm, step=10)
+                pipe_depth_interp = interp_1d_target(pipe_depth, step=10)
                 pipe_boundary_coords_tm = get_target_boundary(pipe_coords_tm, radius=pipe_diameter/2, step=10)
                 safety_length = np.ones(shape=len(pipe_diameter))+(pipe_diameter/2)
                 pipe_safety_boundary_coords_tm = get_target_boundary(pipe_coords_tm, radius=safety_length, step=10)
@@ -286,8 +288,8 @@ while True:
 
     # get target pipe depth
     if bucket_in_pipe:
-        target_pipe_depth = est_pipe_depth_nearest(target_position=bucket_global_pos, pipe_position=pipe_coords_tm,
-                                                   pipe_depth=np.negative(pipe_depth), safety_length=0.1)
+        target_pipe_depth = est_pipe_depth_euclidean(target_position=bucket_global_pos, pipe_position=pipe_coords_tm,
+                                                     pipe_depth=np.negative(pipe_depth_interp), safety_length=0.1)
         pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
         pipe_rela_dist = np.abs(pipe_rela_dist)
         pipe_rela_dist = int(pipe_rela_dist / 10)
