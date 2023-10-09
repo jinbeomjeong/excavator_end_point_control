@@ -128,8 +128,8 @@ def can_com_cd_controller():
                 pipe_coords_tm = np.zeros((pipe_coords.shape[0], 2), dtype=np.double)
                 pipe_depth, pipe_diameter = pipe_property[:, 0], pipe_property[:, 1]
 
-                for i, pipe_coord in enumerate(pipe_coords):  # convert TM coordinate of pipe coordinate
-                    pipe_coords_tm[i, 1], pipe_coords_tm[i, 0] = gps_unit_change(latitude=pipe_coord[0], longitude=pipe_coord[1])
+                pipe_coords_tm[:, 0], pipe_coords_tm[:, 1] = converter_wgs84_to_grs80.transform(xx=pipe_coords[:, 0],
+                                                                                                yy=pipe_coords[:, 1])
 
                 pipe_coords_tm_interp = interp_2d_target(pipe_coords_tm, step=10)
                 pipe_depth_interp = interp_1d_target(pipe_depth, step=10)
