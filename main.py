@@ -50,6 +50,7 @@ gps_coords = np.zeros(shape=4, dtype=np.float64)  # gps_1_latitude, gps_1_longit
 gps_coords_tm = np.zeros(shape=4, dtype=np.float64)  # converted from gps_coords
 bucket_local_pos = np.zeros(shape=3, dtype=np.float64)  # x-axis, y-axis, z-axis
 bucket_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
+bucket_global_pos_tm = np.zeros(shape=2, dtype=np.float64)  #
 
 # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
@@ -81,7 +82,8 @@ logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle(deg)', 'arm_angl
                                        'bucket_depth_pos(mm)', 'excavator_work_state', 'control_state',
                                        'target_pipe_depth(mm)', 'gps_1_latitude', 'gps_1_longitude',
                                        'gps_2_latitude', 'gps_2_longitude', 'gps_1_tm_latitude(m)', 'gps_1_tm_longitude(m)',
-                                       'gps_2_tm_latitude(m)', 'gps_2_tm_longitude(m)'])
+                                       'gps_2_tm_latitude(m)', 'gps_2_tm_longitude(m)',
+                                       'bucket_tm_global_latitude', 'bucket_tm_global_longitude'])
 
 start_time_str = time.strftime('%Y%m%d-%H%M%S', time.localtime(time.time()))
 logging_file_name = args.log_name + '_' + start_time_str
@@ -213,7 +215,7 @@ while True:
 
     # convert TM coordinate
     gps_coords_tm[0], gps_coords_tm[1] = converter_wgs84_to_grs80.transform(xx=gps_coords[0], yy=gps_coords[1]) # TM coordinate of x pos, y pos
-    gps_coords[2], gps_coords[3] = converter_wgs84_to_grs80.transform(xx=gps_coords[2], yy=gps_coords[3])
+    gps_coords_tm[2], gps_coords_tm[3] = converter_wgs84_to_grs80.transform(xx=gps_coords[2], yy=gps_coords[3])
 
     # estimation excavator center position
     excavator_pos[0], excavator_pos[1] = est_gps_center(gps_1_coord=gps_coords_tm[0:2], gps_2_coord=gps_coords_tm[2:4], offset=1.16)
@@ -282,10 +284,13 @@ while True:
                                                                        y_distance=bucket_local_pos[1],
                                                                        heading=excavator_pos[2])
 
+    bucket_global_pos_tm[0], bucket_global_pos_tm[1] = converter_grs80_to_wgs84.transform(xx=bucket_global_pos[0],
+                                                                                          yy=bucket_global_pos[1])
+
     if pipe_coords_tm.shape[0] > 0:
         bucket_in_pipe = recognition_in_range_boundary(input_pos=bucket_global_pos,
-                                                       target_pos_max=pipe_safety_boundary_coords_tm[0],
-                                                       target_pos_min=pipe_safety_boundary_coords_tm[1])
+                                                       target_pos_max=pipe_safety_boundary_coords_tm[0, :, :],
+                                                       target_pos_min=pipe_safety_boundary_coords_tm[1, :, :])
     else:
         bucket_in_pipe = 0
 
@@ -293,7 +298,7 @@ while True:
 
     # get target pipe depth
     if bucket_in_pipe:
-        target_pipe_depth = est_pipe_depth_euclidean(target_position=bucket_global_pos, pipe_position=pipe_coords_tm,
+        target_pipe_depth = est_pipe_depth_euclidean(target_position=bucket_global_pos, pipe_position=pipe_coords_tm_interp,
                                                      pipe_depth=np.negative(pipe_depth_interp), safety_length=0.1)
         pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
         pipe_rela_dist = np.abs(pipe_rela_dist)
@@ -316,7 +321,7 @@ while True:
     if control_state == 1:
         el_time = np.subtract(time.time(), t0_1)
 
-        if np.greater_equal(bucket_local_pos[2], target_pipe_depth+500) and np.greater(el_time, 2.0):
+        if np.greater_equal(bucket_local_pos[2], target_pipe_depth+1000) and np.greater(el_time, 2.0):
             control_state = 0
         else:
             control_state = 1
@@ -342,6 +347,7 @@ while True:
     msg_set_ic.append(safety_control_msg.create_equip_heading_msg(heading=excavator_pos[2]))
     msg_set_ic.append(safety_control_msg.create_comp_angle_msg(boom_angle=relative_angle[0], arm_angle=relative_angle[1],
                                                                bucket_angle=relative_angle[2]))
+    # print(relative_angle)
     msg_set_ic.append(safety_control_msg.create_target_relative_distance_msg(state=rela_dist_state, distance=pipe_rela_dist))
     msg_set_ic.append(safety_control_msg.create_cd_state_msg(state=cd_state,
                                                              work_limit=1 if work_limit_state == 'active' else 0))
@@ -356,8 +362,8 @@ while True:
 
     # create and send message of communication device
     msg_set_cd.append(sc_state_msg)
-    msg_set_cd.append(safety_control_msg.create_end_point_position_msg(x_axis=bucket_global_pos[0],
-                                                                       y_axis=bucket_global_pos[1]))
+    # msg_set_cd.append(safety_control_msg.create_end_point_position_msg(x_axis=bucket_global_pos[0],
+    #                                                                    y_axis=bucket_global_pos[1]))
 
     for message_cd in msg_set_cd:
         can_channel_cd.send(message_cd)
@@ -381,7 +387,8 @@ while True:
                                  '18': int(bucket_local_pos[2]), '19': np.packbits(excavator_work_state)[0],
                                  '20': control_state, '21': target_pipe_depth, '22': gps_coords[0], '23': gps_coords[1],
                                  '24': gps_coords[2], '25': gps_coords[3], '26': gps_coords_tm[0],
-                                 '27': gps_coords_tm[1], '28': gps_coords_tm[2], '29': gps_coords_tm[3]}, index=[0])
+                                 '27': gps_coords_tm[1], '28': gps_coords_tm[2], '29': gps_coords_tm[3],
+                                 '30': bucket_global_pos_tm[0], '31': bucket_global_pos_tm[1]}, index=[0])
 
     logging_data.to_csv(logging_file_path, mode='a', header=False)
     time.sleep(0.1)

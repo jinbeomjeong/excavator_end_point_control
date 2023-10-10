@@ -68,7 +68,7 @@ def est_pipe_depth_euclidean(target_position: np.ndarray, pipe_position: np.ndar
     distance_arr = get_distance(origin=target_position, target=pipe_position)
     est_depth = np.interp(x=np.argmin(distance_arr), xp=pipe_pos_index_arr, fp=pipe_depth)+safety_length
 
-    return est_depth.item()
+    return np.multiply(est_depth, 1000).item()
 
 
 def get_target_boundary(target_pos: np.ndarray, radius: np.ndarray, step: int = 10) -> np.ndarray:
