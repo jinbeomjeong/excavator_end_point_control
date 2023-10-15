@@ -4,7 +4,7 @@ import pandas as pd
 from pyproj import Transformer
 from utils.accessory_lib import system_info
 from utils.predcit_api import predict_control_linear
-from utils.calculate_gps_data import calculation_heading, gps_unit_change, est_gps_center
+from utils.calculate_gps_data import calculation_heading, est_gps_center
 from utils.end_point_kinematics import end_point_kinematics, convert_bucket_angle, bucket_link_calculator
 from utils.recognition_work_status import recognition_excavator_work_status as work_status
 from utils.warning_target import (get_bucket_global_pos, interp_2d_target, interp_1d_target, est_pipe_depth_euclidean,
@@ -50,7 +50,7 @@ gps_coords = np.zeros(shape=4, dtype=np.float64)  # gps_1_latitude, gps_1_longit
 gps_coords_tm = np.zeros(shape=4, dtype=np.float64)  # converted from gps_coords
 bucket_local_pos = np.zeros(shape=3, dtype=np.float64)  # x-axis, y-axis, z-axis
 bucket_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
-bucket_global_pos_tm = np.zeros(shape=2, dtype=np.float64)  #
+bucket_wgs84_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
 
 # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
@@ -72,6 +72,10 @@ elapsed_time: float = 0.0
 # bucket_goal_x_pos, bucket_goal_y_pos, bucket_z_pos, target_depth
 tcp_msg = np.zeros(shape=14, dtype=np.float64)
 
+# convert gps coordinate
+converter_grs80_to_wgs84 = Transformer.from_crs("EPSG:5186", "EPSG:4326")
+converter_wgs84_to_grs80 = Transformer.from_crs("EPSG:4326", "EPSG:5186")
+
 logging_data = pd.DataFrame()
 logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle(deg)', 'arm_angle(deg)', 'bucket_angle(deg)',
                                        'body_angle(deg)', 'relative_boom_angle(deg)', 'relative_arm_angle(deg)',
@@ -83,7 +87,7 @@ logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle(deg)', 'arm_angl
                                        'target_pipe_depth(mm)', 'gps_1_latitude', 'gps_1_longitude',
                                        'gps_2_latitude', 'gps_2_longitude', 'gps_1_tm_latitude(m)', 'gps_1_tm_longitude(m)',
                                        'gps_2_tm_latitude(m)', 'gps_2_tm_longitude(m)',
-                                       'bucket_tm_global_latitude', 'bucket_tm_global_longitude'])
+                                       'bucket_global_latitude(wgs84)', 'bucket_global_longitude(wgs84)'])
 
 start_time_str = time.strftime('%Y%m%d-%H%M%S', time.localtime(time.time()))
 logging_file_name = args.log_name + '_' + start_time_str
@@ -187,10 +191,6 @@ arm_filter = SensorFilter(kernel_size=9)
 bucket_filter = SensorFilter(kernel_size=9)
 bucket_filter_2 = SensorFilter(kernel_size=5)
 
-# convert gps coordinate
-converter_grs80_to_wgs84 = Transformer.from_crs("EPSG:5186", "EPSG:4326")
-converter_wgs84_to_grs80 = Transformer.from_crs("EPSG:4326", "EPSG:5186")
-
 system_info()
 
 # set stand-by state change of safety controller
@@ -213,12 +213,13 @@ while True:
     for i, cal_pos in enumerate(safety_control_msg.read_variable('equipment_cal_pos_data')):
         gps_coords[i] = cal_pos
 
-    # convert TM coordinate
-    gps_coords_tm[0], gps_coords_tm[1] = converter_wgs84_to_grs80.transform(xx=gps_coords[0], yy=gps_coords[1]) # TM coordinate of x pos, y pos
+    # convert TM coordinate(coordinate of x pos, y pos)
+    gps_coords_tm[0], gps_coords_tm[1] = converter_wgs84_to_grs80.transform(xx=gps_coords[0], yy=gps_coords[1])
     gps_coords_tm[2], gps_coords_tm[3] = converter_wgs84_to_grs80.transform(xx=gps_coords[2], yy=gps_coords[3])
 
     # estimation excavator center position
-    excavator_pos[0], excavator_pos[1] = est_gps_center(gps_1_coord=gps_coords_tm[0:2], gps_2_coord=gps_coords_tm[2:4], offset=1.16)
+    excavator_pos[0], excavator_pos[1] = est_gps_center(gps_1_coord=gps_coords_tm[0:2], gps_2_coord=gps_coords_tm[2:4],
+                                                        offset=1.16)
 
     # calculation of excavator heading angle
     excavator_pos[2] = 360-(calculation_heading(gps_x_1=gps_coords_tm[1], gps_x_2=gps_coords_tm[3],
@@ -284,8 +285,8 @@ while True:
                                                                        y_distance=bucket_local_pos[1],
                                                                        heading=excavator_pos[2])
 
-    bucket_global_pos_tm[0], bucket_global_pos_tm[1] = converter_grs80_to_wgs84.transform(xx=bucket_global_pos[0],
-                                                                                          yy=bucket_global_pos[1])
+    bucket_wgs84_global_pos[0], bucket_wgs84_global_pos[1] = converter_grs80_to_wgs84.transform(xx=bucket_global_pos[0],
+                                                                                                yy=bucket_global_pos[1])
 
     if pipe_coords_tm.shape[0] > 0:
         bucket_in_pipe = recognition_in_range_boundary(input_pos=bucket_global_pos,
@@ -358,17 +359,17 @@ while True:
     for message_ic in msg_set_ic:
         can_channel_ic.send(message_ic)
 
-    msg_set_ic = []
+    msg_set_ic.clear()
 
     # create and send message of communication device
     msg_set_cd.append(sc_state_msg)
-    # msg_set_cd.append(safety_control_msg.create_end_point_position_msg(x_axis=bucket_global_pos[0],
-    #                                                                    y_axis=bucket_global_pos[1]))
+    msg_set_cd.append(safety_control_msg.create_end_point_float_position_msg(x_axis=bucket_wgs84_global_pos[0],
+                                                                             y_axis=bucket_wgs84_global_pos[1]))
 
     for message_cd in msg_set_cd:
         can_channel_cd.send(message_cd)
 
-    msg_set_cd = []
+    msg_set_cd.clear()
 
     for i, data in enumerate([excavator_pos[0], excavator_pos[1], excavator_pos[2],
                               bucket_global_pos[0], bucket_global_pos[1], target_pipe_depth, bucket_local_pos[1],
@@ -388,7 +389,7 @@ while True:
                                  '20': control_state, '21': target_pipe_depth, '22': gps_coords[0], '23': gps_coords[1],
                                  '24': gps_coords[2], '25': gps_coords[3], '26': gps_coords_tm[0],
                                  '27': gps_coords_tm[1], '28': gps_coords_tm[2], '29': gps_coords_tm[3],
-                                 '30': bucket_global_pos_tm[0], '31': bucket_global_pos_tm[1]}, index=[0])
+                                 '30': bucket_wgs84_global_pos[0], '31': bucket_wgs84_global_pos[1]}, index=[0])
 
     logging_data.to_csv(logging_file_path, mode='a', header=False)
     time.sleep(0.1)

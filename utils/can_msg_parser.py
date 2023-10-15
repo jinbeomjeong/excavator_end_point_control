@@ -20,18 +20,19 @@ class SafetyControlMsgParser:
         self.__target_relative_distance_id: Final[int] = 0x18FF1018  # SC -> IC
         self.__work_area_information_id: Final[int] = 0x18FF1017  # CD -> IC
         self.__work_area_information_query_id: Final[int] = 0x18FF3012  # SC -> CD
-        self.__end_point_position_id: Final[int] = 0x18FF1019
+        self.__equipment_integer_position_id: Final[int] = 0x18FF1019
+        self.__end_point_float_position_id: Final[int] = 0x18FF1020
 
         self.__ic_state: str = 'none'
         self.__cd_state: str = 'none'
         self.__work_limit: str = 'de-active'
         self.__cd_query: str = 'none'
         self.__n_of_under_utils: int = 0
-        self.__equipment_raw_pos: np.ndarray = np.zeros(shape=4, dtype=np.uint32)  # gps_1_y, gps_1_x, gps_2_y, gps_2_x
+        self.__equipment_raw_integer_pos: np.ndarray = np.zeros(shape=2, dtype=np.uint32)  # Latitude, Longitude
+        self.__equipment_raw_float_pos: np.ndarray = np.zeros(shape=4, dtype=np.uint32)  # gps_1_y, gps_1_x, gps_2_y, gps_2_x
         self.__equipment_cal_pos: np.ndarray = np.zeros(shape=4, dtype=np.float64)
         self.__equipment_origin_pos: np.ndarray = np.zeros(shape=2, dtype=np.float64)  # longitude, latitude, heading
         self.__equipment_altitude: np.ndarray = np.zeros(shape=2, dtype=np.float64)  # gps_1_altitude, gps_2_altitude
-        self.__bucket_position_data: [int] = [0] * 3  # x_pos, y_pos, z_pos
         self.__compensation_angle_data = np.zeros(shape=3, dtype=np.float64)
         self.__work_area_number: int = 0
         self.__admin_phone_number = np.zeros(shape=3, dtype=np.uint16)
@@ -90,8 +91,8 @@ class SafetyControlMsgParser:
         if not self.__class__.get_under_utils_data.called:
             self.__under_utils_coord_id = np.zeros(self.__n_of_under_utils, dtype=np.uint32)
             self.__under_utils_depth_id = np.zeros(self.__n_of_under_utils, dtype=np.uint32)
-            self.__under_utils_coord_data = np.zeros(shape=(self.__n_of_under_utils, 2), dtype=np.double)
-            self.__under_utils_depth_dia_data = np.zeros(shape=(self.__n_of_under_utils, 2), dtype=np.double)
+            self.__under_utils_coord_data = np.zeros(shape=(self.__n_of_under_utils, 2), dtype=np.float64)
+            self.__under_utils_depth_dia_data = np.zeros(shape=(self.__n_of_under_utils, 2), dtype=np.float64)
 
             for i in range(self.__n_of_under_utils):
                 self.__under_utils_coord_id[i] = int('0x18FF' + hex(i)[2:4].zfill(2) + '01', base=16)
@@ -106,23 +107,27 @@ class SafetyControlMsgParser:
                 if coord_id == arbit_id:
                     self.__under_utils_coord_data[int(hex(arbit_id)[6:8], base=16), 0:2] = \
                         np.array([36+(int.from_bytes(payload[4:8], byteorder='little')*(10 ** -8)),
-                                  126+(int.from_bytes(payload[0:4], byteorder='little')*(10 ** -8))], dtype=np.double)
+                                  126+(int.from_bytes(payload[0:4], byteorder='little')*(10 ** -8))], dtype=np.float64)
 
             for depth_id in self.__under_utils_depth_id:
                 if depth_id == arbit_id:
                     self.__under_utils_depth_dia_data[int(hex(arbit_id)[6:8], base=16), 0:2] = \
-                        np.array([int.from_bytes(payload[0:2], byteorder='little')*0.01, payload[2]*0.1], dtype=np.double)
+                        np.array([int.from_bytes(payload[0:2], byteorder='little')*0.01, payload[2]*0.1], dtype=np.float64)
 
     def get_equip_pos(self, packet=can.Message()):
         payload = packet.data
 
         if packet.arbitration_id == self.__equipment_coord_frame_left_id:
-            self.__equipment_raw_pos[0:2] = np.array([int.from_bytes(payload[0:4], byteorder='little'),
-                                                      int.from_bytes(payload[4:8], byteorder='little')])
+            self.__equipment_raw_float_pos[0:2] = np.array([int.from_bytes(payload[0:4], byteorder='little'),
+                                                            int.from_bytes(payload[4:8], byteorder='little')])
 
         if packet.arbitration_id == self.__equipment_coord_frame_right_id:
-            self.__equipment_raw_pos[2:4] = np.array([int.from_bytes(payload[0:4], byteorder='little'),
-                                                      int.from_bytes(payload[4:8], byteorder='little')])
+            self.__equipment_raw_float_pos[2:4] = np.array([int.from_bytes(payload[0:4], byteorder='little'),
+                                                            int.from_bytes(payload[4:8], byteorder='little')])
+
+        if packet.arbitration_id == self.__equipment_integer_position_id:
+            self.__equipment_raw_integer_pos[0] = payload[0]
+            self.__equipment_raw_integer_pos[1] = int.from_bytes(payload[1:3], byteorder='little', signed=False)
 
         if packet.arbitration_id == self.__equipment_coord_frame_left_altitude_id:
             self.__equipment_altitude[0] = int.from_bytes(payload[0:2], byteorder='little', signed=True) * 0.01
@@ -130,10 +135,8 @@ class SafetyControlMsgParser:
         if packet.arbitration_id == self.__equipment_coord_frame_left_altitude_id:
             self.__equipment_altitude[1] = int.from_bytes(payload[0:2], byteorder='little', signed=True) * 0.01
 
-        self.__equipment_cal_pos[0] = 36 + (self.__equipment_raw_pos[0] * (10 ** -8))
-        self.__equipment_cal_pos[1] = 126 + (self.__equipment_raw_pos[1] * (10 ** -8))
-        self.__equipment_cal_pos[2] = 36 + (self.__equipment_raw_pos[2] * (10 ** -8))
-        self.__equipment_cal_pos[3] = 126 + (self.__equipment_raw_pos[3] * (10 ** -8))
+        for i, int_val in enumerate([36, 126, 36, 126]):
+            self.__equipment_cal_pos[i] = int_val+(self.__equipment_raw_float_pos[i]*(10**-8))
 
     def get_work_area_information(self, packet=can.Message()):
         if packet.arbitration_id == self.__work_area_information_id:
@@ -234,7 +237,7 @@ class SafetyControlMsgParser:
 
         return send_msg
 
-    def create_end_point_position_msg(self, x_axis: np.ndarray = 0.0, y_axis: np.ndarray = 0.0) -> can.Message:
+    def create_end_point_tm_position_msg(self, x_axis: np.ndarray = 0.0, y_axis: np.ndarray = 0.0) -> can.Message:
         payload = bytes(0)
 
         if x_axis <= 0: x_axis = 0
@@ -243,7 +246,20 @@ class SafetyControlMsgParser:
         payload += int(x_axis*1000).to_bytes(length=4, byteorder='little')
         payload += int(y_axis*1000).to_bytes(length=4, byteorder='little')
 
-        send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__end_point_position_id,
+        send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__end_point_float_position_id,
+                               data=payload, is_extended_id=True)
+
+        return send_msg
+
+    def create_end_point_float_position_msg(self, x_axis: np.ndarray, y_axis: np.ndarray) -> can.Message:
+        x_axis_float, x_axis_integer = np.modf(x_axis)
+        y_axis_float, y_axis_integer = np.modf(y_axis)
+
+        payload = bytes(0)
+        payload += int(round(x_axis_float[0]*(10**8), 8)).to_bytes(length=4, byteorder='little')
+        payload += int(round(y_axis_float[0]*(10**8), 8)).to_bytes(length=4, byteorder='little')
+
+        send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__end_point_float_position_id,
                                data=payload, is_extended_id=True)
 
         return send_msg
@@ -271,7 +287,7 @@ class SafetyControlMsgParser:
             return self.__under_utils_depth_dia_data
 
         elif parameter_name == 'equipment_raw_pos':
-            return self.__equipment_raw_pos
+            return self.__equipment_raw_float_pos
 
         elif parameter_name == 'equipment_cal_pos_data':
             return self.__equipment_cal_pos
