@@ -122,17 +122,13 @@ def get_distance(origin: np.ndarray, target: np.ndarray) -> np.ndarray:
 
 
 @jit(nopython=True, cache=True)
-def get_distance_opt(origin: np.ndarray, target: np.ndarray, threshold: float) -> Tuple[np.ndarray, np.ndarray]:
+def get_distance_opt(origin: np.ndarray, target: np.ndarray) -> np.ndarray:
     dis_arr = np.zeros(target.shape[0], dtype=np.float64)
-    dis_bool = np.zeros(target.shape[0], dtype=np.uint8)
 
     for i, pos in enumerate(target):
         dis_arr[i] = np.sqrt(np.power(origin[0]-pos[0], 2) + np.power(origin[1]-pos[1], 2))
-        dis_bool[i] = int(dis_arr[i] < threshold)
 
-    in_work = np.any(dis_bool)
-
-    return dis_arr, in_work
+    return dis_arr
 
 
 def get_bucket_global_pos(origin: np.ndarray, y_distance: np.ndarray, heading: np.ndarray) -> np.ndarray:
@@ -147,6 +143,6 @@ def get_bucket_global_pos(origin: np.ndarray, y_distance: np.ndarray, heading: n
 
 
 def get_close_pipe_status(bucket_pos: np.ndarray, pipe_pos: np.ndarray) -> int:
-    end_point_status = 1 if np.sum(__get_distance(bucket_pos, pipe_pos) < 0.01) else 0
+    end_point_status = 1 if np.sum(get_distance(bucket_pos, pipe_pos) < 0.01) else 0
 
     return end_point_status
