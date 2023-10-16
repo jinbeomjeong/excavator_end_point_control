@@ -13,6 +13,7 @@ from utils.can_msg_parser import SafetyControlMsgParser, InclinometerSensor, Joy
 from utils.tcp_lib import TCPClient
 from typing import Final
 
+np.set_printoptions(precision=9)
 parser = argparse.ArgumentParser()
 parser.add_argument("--ip", type=str, default='')
 parser.add_argument("--log_name", type=str, default='logging_data')

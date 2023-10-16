@@ -256,8 +256,8 @@ class SafetyControlMsgParser:
         y_axis_float, y_axis_integer = np.modf(y_axis)
 
         payload = bytes(0)
-        payload += int(round(x_axis_float[0]*(10**8), 8)).to_bytes(length=4, byteorder='little')
-        payload += int(round(y_axis_float[0]*(10**8), 8)).to_bytes(length=4, byteorder='little')
+        payload += int(round(x_axis_float*(10**8), 8)).to_bytes(length=4, byteorder='little')
+        payload += int(round(y_axis_float*(10**8), 8)).to_bytes(length=4, byteorder='little')
 
         send_msg = can.Message(timestamp=self.__time_elapsed(), arbitration_id=self.__end_point_float_position_id,
                                data=payload, is_extended_id=True)
