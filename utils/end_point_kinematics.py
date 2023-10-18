@@ -9,20 +9,29 @@ length_offset = 150  # unit: mm
 
 angle_t1 = 0
 result_angle = 0
+absolute_angle_filtered = np.zeros(shape=3, dtype=np.float64)  # 0: boom angle, 1: body angle, 2: bucket angle
+local_x_pos = np.zeros(shape=4, dtype=np.float64)  # 0: boom x-axis, 1: arm x-axis, 2: bucket x-axis, 3: local x-axis
+local_z_pos = np.zeros(shape=4, dtype=np.float64)  # 0: boom z-axis, 1: arm z-axis, 2: bucket z-axis, 3: local z-axis
 
 
-def end_point_kinematics(boom_angle, arm_angle, bucket_angle):
-    x_pos_boom = boom_length * np.cos(np.deg2rad(boom_angle))
-    x_pos_arm = arm_length * np.cos(np.deg2rad(arm_angle))
-    x_pos_bucket = bucket_length * np.cos(np.deg2rad(bucket_angle))
-    x_pos = x_pos_boom + x_pos_arm + x_pos_bucket + length_offset
+def end_point_kinematics(body_rl_angle, boom_rl_angle, arm_rl_angle, bucket_rl_angle) -> [float, float]:
 
-    z_pos_boom = boom_length * np.sin(np.deg2rad(boom_angle))
-    z_pos_arm = arm_length * np.sin(np.deg2rad(arm_angle))
-    z_pos_bucket = bucket_length * np.sin(np.deg2rad(bucket_angle))
-    z_pos = z_pos_boom + z_pos_arm + z_pos_bucket + height_offset
+    # calculate absolute angle
+    absolute_angle_filtered[0] = np.sum([boom_rl_angle, body_rl_angle])
+    absolute_angle_filtered[1] = np.sum(([arm_rl_angle, boom_rl_angle, body_rl_angle]))
+    absolute_angle_filtered[2] = np.sum([bucket_rl_angle, arm_rl_angle, boom_rl_angle, body_rl_angle])
 
-    return x_pos, z_pos
+    local_x_pos[0] = boom_length * np.cos(np.deg2rad(absolute_angle_filtered[0]))
+    local_x_pos[1] = arm_length * np.cos(np.deg2rad(absolute_angle_filtered[1]))
+    local_x_pos[2] = bucket_length * np.cos(np.deg2rad(absolute_angle_filtered[2]))
+    local_x_pos[3] = np.sum(local_x_pos[0:3])+length_offset
+
+    local_z_pos[0] = boom_length * np.sin(np.deg2rad(absolute_angle_filtered[0]))
+    local_z_pos[1] = arm_length * np.sin(np.deg2rad(absolute_angle_filtered[1]))
+    local_z_pos[2] = bucket_length * np.sin(np.deg2rad(absolute_angle_filtered[2]))
+    local_z_pos[3] = np.sum(local_z_pos[0:3])+height_offset
+
+    return local_x_pos[3], local_z_pos[3]
 
 
 def convert_bucket_angle(angle) -> float:
