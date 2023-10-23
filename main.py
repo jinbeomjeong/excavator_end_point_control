@@ -12,6 +12,7 @@ np.set_printoptions(precision=9)
 parser = argparse.ArgumentParser()
 parser.add_argument("--ip", type=str, default='')
 parser.add_argument("--log_name", type=str, default='logging_data')
+parser.add_argument("-- target", type=int, default=-9999)
 args = parser.parse_args()
 
 can_channel_ic = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
@@ -28,10 +29,9 @@ safety_control_msg = SafetyControlMsgParser()
 control_state = 0
 t0_1: float = 0.0
 ic_state, sc_state = 0, 0
-target_pipe_depth: int = -9999
+target_pipe_depth = args.target
 
 bucket_local_pos = np.zeros(shape=3, dtype=np.float64)  # x-axis, y-axis, z-axis
-bucket_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
 
 # left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
@@ -164,9 +164,9 @@ while True:
                                  '3': round(excavator_angle[1].item(), 2), '4': round(excavator_angle[2].item(), 2),
                                  '5': round(excavator_angle[3].item(), 2), '6': round(relative_angle[0].item(), 2),
                                  '7': round(relative_angle[1].item(), 2), '8': round(relative_angle[2].item(), 2),
-                                 '9': joystick_pos[0], '10': joystick_pos[1],
-                                 '11': joystick_pos[2], '12': joystick_pos[3], '13': int(bucket_local_pos[1]),
-                                 '14': int(bucket_local_pos[2]), '15': target_pipe_depth}, index=[0])
+                                 '9': joystick_pos[0], '10': joystick_pos[1], '11': joystick_pos[2],
+                                 '12': joystick_pos[3], '13': int(bucket_local_pos[1]), '14': int(bucket_local_pos[2]),
+                                 '15': target_pipe_depth}, index=[0])
 
     logging_data.to_csv(logging_file_path, mode='a', header=False)
     time.sleep(0.1)
