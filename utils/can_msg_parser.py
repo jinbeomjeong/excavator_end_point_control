@@ -252,9 +252,8 @@ class SafetyControlMsgParser:
         return send_msg
 
     def create_end_point_float_position_msg(self, x_axis: np.ndarray, y_axis: np.ndarray) -> can.Message:
-        x_axis_float, x_axis_integer = np.modf(x_axis)
-        y_axis_float, y_axis_integer = np.modf(y_axis)
-
+        x_axis_float, x_axis_integer = np.modf(abs(x_axis))
+        y_axis_float, y_axis_integer = np.modf(abs(y_axis))
         payload = bytes(0)
         payload += int(round(x_axis_float*(10**8), 8)).to_bytes(length=4, byteorder='little')
         payload += int(round(y_axis_float*(10**8), 8)).to_bytes(length=4, byteorder='little')
