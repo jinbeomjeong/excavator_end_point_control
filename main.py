@@ -16,6 +16,7 @@ from typing import Final
 np.set_printoptions(precision=9)
 parser = argparse.ArgumentParser()
 parser.add_argument("--ip", type=str, default='')
+parser.add_argument("--enable_log", type=int, default=0)
 parser.add_argument("--log_name", type=str, default='logging_data')
 args = parser.parse_args()
 
@@ -69,6 +70,7 @@ excavator_pos = np.zeros(shape=3, dtype=np.float64)  # latitude, longitude, head
 
 elapsed_time: float = 0.0
 system_t0: float = 0.0
+logging_file_path: str = ""
 
 # excavator_tm_latitude, excavator_tm_longitude, heading
 # bucket_goal_x_pos, bucket_goal_y_pos, bucket_z_pos, target_depth
@@ -78,23 +80,26 @@ tcp_msg = np.zeros(shape=14, dtype=np.float64)
 converter_grs80_to_wgs84 = Transformer.from_crs("EPSG:5186", "EPSG:4326")
 converter_wgs84_to_grs80 = Transformer.from_crs("EPSG:4326", "EPSG:5186")
 
-logging_data = pd.DataFrame()
-logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle(deg)', 'arm_angle(deg)', 'bucket_angle(deg)',
-                                       'body_angle(deg)', 'relative_boom_angle(deg)', 'relative_arm_angle(deg)',
-                                       'relative_bucket_angle(deg)', 'joystick_left_x_pos', 'joystick_left_y_pos',
-                                       'joystick_right_x_pos', 'joystick_right_y_pos',
-                                       'excavator_global_x_pos(m)', 'excavator_global_y_pos(m)',
-                                       'excavator_heading(deg)', 'bucket_goal_x_pos(m)', 'bucket_goal_y_pos(m)',
-                                       'bucket_depth_pos(mm)', 'excavator_work_state', 'control_state',
-                                       'target_pipe_depth(mm)', 'gps_1_latitude', 'gps_1_longitude',
-                                       'gps_2_latitude', 'gps_2_longitude', 'gps_1_tm_latitude(m)', 'gps_1_tm_longitude(m)',
-                                       'gps_2_tm_latitude(m)', 'gps_2_tm_longitude(m)',
-                                       'bucket_global_latitude(wgs84)', 'bucket_global_longitude(wgs84)'])
+if args.enable_log:
+    global logging_file_path
 
-start_time_str = time.strftime('%Y%m%d-%H%M%S', time.localtime(time.time()))
-logging_file_name = args.log_name + '_' + start_time_str
-logging_file_path = './logging_data/' + logging_file_name + '.csv'
-logging_header.to_csv(logging_file_path, mode='a', header=True)
+    logging_data = pd.DataFrame()
+    logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle(deg)', 'arm_angle(deg)', 'bucket_angle(deg)',
+                                           'body_angle(deg)', 'relative_boom_angle(deg)', 'relative_arm_angle(deg)',
+                                           'relative_bucket_angle(deg)', 'joystick_left_x_pos', 'joystick_left_y_pos',
+                                           'joystick_right_x_pos', 'joystick_right_y_pos',
+                                           'excavator_global_x_pos(m)', 'excavator_global_y_pos(m)',
+                                           'excavator_heading(deg)', 'bucket_goal_x_pos(m)', 'bucket_goal_y_pos(m)',
+                                           'bucket_depth_pos(mm)', 'excavator_work_state', 'control_state',
+                                           'target_pipe_depth(mm)', 'gps_1_latitude', 'gps_1_longitude',
+                                           'gps_2_latitude', 'gps_2_longitude', 'gps_1_tm_latitude(m)', 'gps_1_tm_longitude(m)',
+                                           'gps_2_tm_latitude(m)', 'gps_2_tm_longitude(m)',
+                                           'bucket_global_latitude(wgs84)', 'bucket_global_longitude(wgs84)'])
+
+    start_time_str = time.strftime('%Y%m%d-%H%M%S', time.localtime(time.time()))
+    logging_file_name = args.log_name + '_' + start_time_str
+    logging_file_path = logging_file_path + './logging_data/' + logging_file_name + '.csv'
+    logging_header.to_csv(logging_file_path, mode='a', header=True)
 
 
 def can_com_ic_controller():
@@ -287,17 +292,16 @@ while True:
     bucket_global_pos[0], bucket_global_pos[1] = get_bucket_global_pos(origin=excavator_pos[0:2],
                                                                        y_distance=bucket_local_pos[1],
                                                                        heading=excavator_pos[2])
-    bucket_global_pos[0] = bucket_global_pos[0]+0.5
+    bucket_global_pos[0] += 0.5  # offset value(unit: meter) of longitude bucket global position
     bucket_wgs84_global_pos[0], bucket_wgs84_global_pos[1] = converter_grs80_to_wgs84.transform(xx=bucket_global_pos[0],
                                                                                                 yy=bucket_global_pos[1])
 
-    if pipe_safety_boundary_coords_tm.shape[1] > 1:
+    if pipe_safety_boundary_coords_tm.shape[1] > 1:  # positive recognition to length of pipe data
         bucket_in_pipe = recognition_in_range_boundary(input_pos=bucket_global_pos,
                                                        target_pos_max=pipe_safety_boundary_coords_tm[0, :, :],
                                                        target_pos_min=pipe_safety_boundary_coords_tm[1, :, :])
     else:
         bucket_in_pipe = 0
-        time.sleep(0.09)
 
     work_limit_state = safety_control_msg.read_variable('work_limit')  # enable work_limit_state = 'de-active'
 
@@ -381,20 +385,24 @@ while True:
                               relative_angle_filtered[2], safety_state, np.packbits(excavator_work_state)[0], bucket_in_pipe]):
         tcp_msg[i] = data
 
-    #logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(excavator_angle[0], 2),
-                                 #'3': round(excavator_angle[1], 2), '4': round(excavator_angle[2], 2),
-                                 #'5': round(excavator_angle[3], 2), '6': round(relative_angle[0], 2),
-                                 #'7': round(relative_angle[1], 2), '8': round(relative_angle[2], 2),
-                                 #'9': joystick_pos[0], '10': joystick_pos[1],
-                                 #'11': joystick_pos[2], '12': joystick_pos[3], '13': round(excavator_pos[0], 3),
-                                 #'14': round(excavator_pos[1], 3), '15': round(excavator_pos[2], 1),
-                                 #'16': round(bucket_global_pos[0], 3), '17': round(bucket_global_pos[1], 3),
-                                 #'18': int(bucket_local_pos[2]), '19': np.packbits(excavator_work_state)[0],
-                                 #'20': control_state, '21': target_pipe_depth, '22': gps_coords[0], '23': gps_coords[1],
-                                 #'24': gps_coords[2], '25': gps_coords[3], '26': gps_coords_tm[0],
-                                 #'27': gps_coords_tm[1], '28': gps_coords_tm[2], '29': gps_coords_tm[3],
-                                 #'30': bucket_wgs84_global_pos[0], '31': bucket_wgs84_global_pos[1]}, index=[0])
+    if args.enable_log:
+        logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(excavator_angle[0], 2),
+                                     '3': round(excavator_angle[1], 2), '4': round(excavator_angle[2], 2),
+                                     '5': round(excavator_angle[3], 2), '6': round(relative_angle[0], 2),
+                                     '7': round(relative_angle[1], 2), '8': round(relative_angle[2], 2),
+                                     '9': joystick_pos[0], '10': joystick_pos[1],
+                                     '11': joystick_pos[2], '12': joystick_pos[3], '13': round(excavator_pos[0], 3),
+                                     '14': round(excavator_pos[1], 3), '15': round(excavator_pos[2], 1),
+                                     '16': round(bucket_global_pos[0], 3), '17': round(bucket_global_pos[1], 3),
+                                     '18': int(bucket_local_pos[2]), '19': np.packbits(excavator_work_state)[0],
+                                     '20': control_state, '21': target_pipe_depth, '22': gps_coords[0], '23': gps_coords[1],
+                                     '24': gps_coords[2], '25': gps_coords[3], '26': gps_coords_tm[0],
+                                     '27': gps_coords_tm[1], '28': gps_coords_tm[2], '29': gps_coords_tm[3],
+                                     '30': bucket_wgs84_global_pos[0], '31': bucket_wgs84_global_pos[1]}, index=[0])
 
-    #logging_data.to_csv(logging_file_path, mode='a', header=False)
+        logging_data.to_csv(logging_file_path, mode='a', header=False)
+
+    if pipe_safety_boundary_coords_tm.shape[1] <= 1:  # negative recognition to length of pipe data
+        time.sleep(0.09)
 
     print(f'{time.time()-system_t0:.3f}',f'{target_pipe_depth:.0f}', f'{bucket_local_pos[2]:.0f}')
