@@ -12,7 +12,7 @@ np.set_printoptions(precision=9)
 parser = argparse.ArgumentParser()
 parser.add_argument("--ip", type=str, default='')
 parser.add_argument("--log_name", type=str, default='logging_data')
-parser.add_argument("-- target", type=int, default=-9999)
+parser.add_argument("--target", type=int, default=-9999)
 args = parser.parse_args()
 
 can_channel_ic = can.interface.Bus(bustype='pcan', channel='PCAN_USBBUS1', bitrate=250000)
@@ -139,7 +139,7 @@ while True:
                                                                     bucket_rl_angle=relative_angle_filtered[2])
 
     work_limit_state = safety_control_msg.read_variable('work_limit')  # enable work_limit_state = 'de-active'
-
+    print(joystick_pos)
     # safety control of bucket position
     if control_state == 0:
         control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2].item(), time_offset=1.0,
@@ -166,7 +166,7 @@ while True:
                                  '7': round(relative_angle[1].item(), 2), '8': round(relative_angle[2].item(), 2),
                                  '9': joystick_pos[0], '10': joystick_pos[1], '11': joystick_pos[2],
                                  '12': joystick_pos[3], '13': int(bucket_local_pos[1]), '14': int(bucket_local_pos[2]),
-                                 '15': target_pipe_depth}, index=[0])
+                                 '15': target_pipe_depth, '16': control_state}, index=[0])
 
     logging_data.to_csv(logging_file_path, mode='a', header=False)
     time.sleep(0.1)

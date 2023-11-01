@@ -17,8 +17,8 @@ local_z_pos = np.zeros(shape=4, dtype=np.float64)  # 0: boom z-axis, 1: arm z-ax
 def end_point_kinematics(body_rl_angle, boom_rl_angle, arm_rl_angle, bucket_rl_angle) -> [float, float]:
     # calculate absolute angle
     absolute_angle[0] = np.sum([boom_rl_angle, body_rl_angle])
-    absolute_angle[1] = np.sum(([arm_rl_angle, absolute_angle[0]]))
-    absolute_angle[2] = np.sum([bucket_rl_angle, absolute_angle[1]])
+    absolute_angle[1] = np.sum(([arm_rl_angle, boom_rl_angle]))
+    absolute_angle[2] = np.sum([bucket_rl_angle, arm_rl_angle, boom_rl_angle])
 
     local_x_pos[0] = boom_length * np.cos(np.deg2rad(absolute_angle[0]))
     local_x_pos[1] = arm_length * np.cos(np.deg2rad(absolute_angle[1]))
