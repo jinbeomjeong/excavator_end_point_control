@@ -81,8 +81,6 @@ converter_grs80_to_wgs84 = Transformer.from_crs("EPSG:5186", "EPSG:4326")
 converter_wgs84_to_grs80 = Transformer.from_crs("EPSG:4326", "EPSG:5186")
 
 if args.enable_log:
-    global logging_file_path
-
     logging_data = pd.DataFrame()
     logging_header = pd.DataFrame(columns=['time(sec)', 'boom_angle(deg)', 'arm_angle(deg)', 'bucket_angle(deg)',
                                            'body_angle(deg)', 'relative_boom_angle(deg)', 'relative_arm_angle(deg)',
