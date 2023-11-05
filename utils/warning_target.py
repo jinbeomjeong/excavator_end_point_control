@@ -60,13 +60,12 @@ def est_pipe_depth_nearest(target_position: np.ndarray, pipe_position: np.ndarra
     return np.multiply(np.max(est_depth), 1000)
 
 
-def est_pipe_depth_euclidean(target_position: np.ndarray, pipe_position: np.ndarray, pipe_depth: np.ndarray,
-                             safety_length: float = 0.0) -> float:
+def est_pipe_depth_euclidean(target_position: np.ndarray, pipe_position: np.ndarray, pipe_depth: np.ndarray) -> float:
     global est_depth
 
     pipe_pos_index_arr = np.arange(pipe_position.shape[0])
     distance_arr = get_distance(origin=target_position, target=pipe_position)
-    est_depth = np.interp(x=np.argmin(distance_arr), xp=pipe_pos_index_arr, fp=pipe_depth)+safety_length
+    est_depth = np.interp(x=np.argmin(distance_arr), xp=pipe_pos_index_arr, fp=pipe_depth)
 
     return np.multiply(est_depth, 1000).item()
 

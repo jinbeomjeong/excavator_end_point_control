@@ -54,10 +54,10 @@ bucket_local_pos = np.zeros(shape=3, dtype=np.float64)  # x-axis, y-axis, z-axis
 bucket_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
 bucket_wgs84_global_pos = np.zeros(shape=2, dtype=np.float64)  # latitude, longitude
 
-# left_x_pos, left_y_pos, right_x_pos, right_y_pos
+# joystick_pos: left_x_pos, left_y_pos, right_x_pos, right_y_pos
 # left_x_pos -> swing, left_y_pos -> arm, right_x_pos -> bucket, right_y -> boom
 joystick_pos = np.zeros(shape=4, dtype=np.uint8)
-excavator_angle = np.zeros(shape=4, dtype=np.float64)
+excavator_angle = np.zeros(shape=4, dtype=np.float64)  # boom, arm, bucket and body angle
 comp_angle = np.zeros(shape=3, dtype=np.float64)  # boom, arm and bucket angle
 
 angle_sensor_offset = np.array([267.9, 265.4, -87.9, 270.0], dtype=np.float64)  # offset angle of boom, arm, bucket and body
@@ -70,6 +70,7 @@ excavator_pos = np.zeros(shape=3, dtype=np.float64)  # latitude, longitude, head
 
 elapsed_time: float = 0.0
 system_t0: float = 0.0
+safety_length: float = 0.5  # unit: meter
 logging_file_path: str = ""
 
 # excavator_tm_latitude, excavator_tm_longitude, heading
@@ -145,8 +146,8 @@ def can_com_cd_controller():
                 pipe_coords_tm_interp = interp_2d_target(pipe_coords_tm, step=10)
                 pipe_depth_interp = interp_1d_target(pipe_depth, step=10)
                 pipe_boundary_coords_tm = get_target_boundary(pipe_coords_tm, radius=pipe_diameter/2, step=10)
-                safety_length = np.ones(shape=len(pipe_diameter))*1  # unit: meter
-                pipe_safety_boundary_coords_tm = get_target_boundary(pipe_coords_tm, radius=safety_length, step=10)
+                safety_length_arr = np.ones(shape=len(pipe_diameter))*safety_length  # unit: meter
+                pipe_safety_boundary_coords_tm = get_target_boundary(pipe_coords_tm, radius=safety_length_arr, step=10)
                 print(safety_control_msg.read_variable('cd_query'))
                 receive_state = True
                 done_state = False
@@ -194,17 +195,28 @@ class SensorFilter:
 boom_filter = SensorFilter(kernel_size=9)
 arm_filter = SensorFilter(kernel_size=9)
 bucket_filter = SensorFilter(kernel_size=9)
-bucket_filter_2 = SensorFilter(kernel_size=5)
+swing_filter = SensorFilter(kernel_size=9)
 
 system_info()
 
 # set stand-by state change of safety controller
-'''
+
 # waiting for integrated controller
+print('waiting for integrated controller...')
 while True:
-    if safety_control_msg.read_variable('ic_state') == 'on': break
+    if safety_control_msg.read_variable('ic_state') == 'on':
+        break
     time.sleep(0.1)
-'''
+print('integrated controller status is checked!', end='\n\n')
+
+
+# waiting for communication device
+print('waiting for communication device...')
+while True:
+    if safety_control_msg.read_variable('cd_state') == 'on':
+        break
+    time.sleep(0.1)
+print('communication device status is checked!', end='\n\n')
 
 start_time: Final[float] = time.time()
 print('algorithm is running...')
@@ -238,7 +250,7 @@ while True:
     excavator_angle[3] = body_sensor.read_sensor_value('x_axis')
 
     # execute suppression bucket angle
-    excavator_angle[2] = bucket_filter_2.point_by_median(input_value=excavator_angle[2])
+    excavator_angle[2] = bucket_filter.point_by_median(input_value=excavator_angle[2].item())
 
     # offset of body angle value
     excavator_angle[3] = excavator_angle[3] - angle_sensor_offset[3]
@@ -273,7 +285,8 @@ while True:
 
     # recognition of excavator state
     excavator_work_state[7], excavator_work_state[6] = work_status(boom_angle=comp_angle[0], arm_angle=comp_angle[1],
-                                                                   bucket_angle=comp_angle[2], heading_angle=excavator_pos[2],
+                                                                   bucket_angle=comp_angle[2],
+                                                                   heading_angle=swing_filter.point_by_median(excavator_pos[2].item()),
                                                                    left_joystick_x_pos=joystick_pos[0],
                                                                    left_joystick_y_pos=joystick_pos[1],
                                                                    right_joystick_x_pos=joystick_pos[2],
@@ -306,7 +319,7 @@ while True:
     # get target pipe depth
     if bucket_in_pipe:
         target_pipe_depth = est_pipe_depth_euclidean(target_position=bucket_global_pos, pipe_position=pipe_coords_tm_interp,
-                                                     pipe_depth=np.negative(pipe_depth_interp), safety_length=0.1)
+                                                     pipe_depth=np.negative(pipe_depth_interp))
         pipe_rela_dist = np.subtract(target_pipe_depth, bucket_local_pos[2])
         pipe_rela_dist = np.abs(pipe_rela_dist)
         pipe_rela_dist = int(pipe_rela_dist / 10)
@@ -317,10 +330,12 @@ while True:
 
     if work_limit_state == 'active':
         target_pipe_depth = 100  # ground limit excavating depth(mm)
+    else:
+        target_pipe_depth += (safety_length*1000)
 
     # safety control of bucket position
     if control_state == 0:
-        control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2], time_offset=1.0,
+        control_state, predict_signal = predict_control_linear(input_signal=bucket_local_pos[2].item(), time_offset=1.0,
                                                                threshold_signal=target_pipe_depth, release_signal=500)
 
         t0_1 = time.time()
@@ -384,14 +399,14 @@ while True:
         tcp_msg[i] = data
 
     if args.enable_log:
-        logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(excavator_angle[0], 2),
-                                     '3': round(excavator_angle[1], 2), '4': round(excavator_angle[2], 2),
-                                     '5': round(excavator_angle[3], 2), '6': round(relative_angle[0], 2),
-                                     '7': round(relative_angle[1], 2), '8': round(relative_angle[2], 2),
+        logging_data = pd.DataFrame({'1': round(elapsed_time, 2), '2': round(excavator_angle[0].item(), 2),
+                                     '3': round(excavator_angle[1].item(), 2), '4': round(excavator_angle[2].item(), 2),
+                                     '5': round(excavator_angle[3].item(), 2), '6': round(relative_angle[0].item(), 2),
+                                     '7': round(relative_angle[1].item(), 2), '8': round(relative_angle[2].item(), 2),
                                      '9': joystick_pos[0], '10': joystick_pos[1],
-                                     '11': joystick_pos[2], '12': joystick_pos[3], '13': round(excavator_pos[0], 3),
-                                     '14': round(excavator_pos[1], 3), '15': round(excavator_pos[2], 1),
-                                     '16': round(bucket_global_pos[0], 3), '17': round(bucket_global_pos[1], 3),
+                                     '11': joystick_pos[2], '12': joystick_pos[3], '13': round(excavator_pos[0].item(), 3),
+                                     '14': round(excavator_pos[1].item(), 3), '15': round(excavator_pos[2].item(), 1),
+                                     '16': round(bucket_global_pos[0].item(), 3), '17': round(bucket_global_pos[1].item(), 3),
                                      '18': int(bucket_local_pos[2]), '19': np.packbits(excavator_work_state)[0],
                                      '20': control_state, '21': target_pipe_depth, '22': gps_coords[0], '23': gps_coords[1],
                                      '24': gps_coords[2], '25': gps_coords[3], '26': gps_coords_tm[0],
@@ -403,4 +418,4 @@ while True:
     if pipe_safety_boundary_coords_tm.shape[1] <= 1:  # negative recognition to length of pipe data
         time.sleep(0.09)
 
-    print(f'{time.time()-system_t0:.3f}',f'{target_pipe_depth:.0f}', f'{bucket_local_pos[2]:.0f}')
+    print(f'{time.time()-system_t0:.3f}', f'{target_pipe_depth:.0f}', f'{bucket_local_pos[2]:.0f}')
